@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getGrowthRecords, addGrowthRecord, updateGrowthRecord, deleteGrowthRecord } from '../utils/storage';
+import { useNavigate } from 'react-router-dom';
+import { getGrowthRecords, addGrowthRecord, updateGrowthRecord, deleteGrowthRecord, getProfile } from '../utils/storage';
 import { formatDate } from '../utils/dateUtils';
 import GrowthChart from '../components/GrowthChart';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
@@ -11,12 +12,18 @@ export default function Growth() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [profile, setProfile] = useState(null);
+  const [standardType, setStandardType] = useState('who');
+  const navigate = useNavigate();
 
   const refresh = useCallback(() => {
     setRecords(getGrowthRecords());
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    setProfile(getProfile());
+  }, [refresh]);
 
   const openAdd = () => {
     setEditing(null);
@@ -53,6 +60,9 @@ export default function Growth() {
     }
   };
 
+  const hasBirthDate = profile?.birthDate;
+  const hasRecords = records.length >= 2;
+
   return (
     <div className="fade-in">
       <div className="page-header">
@@ -62,8 +72,50 @@ export default function Growth() {
         </button>
       </div>
 
-      {records.length >= 2 && <GrowthChart records={records} />}
+      {/* 未设置出生日期提示 */}
+      {!hasBirthDate && records.length > 0 && (
+        <div className="card" style={{
+          textAlign: 'center', padding: 16, marginBottom: 12,
+          background: '#FFF9E6', border: '1px solid #FFE0A0',
+        }}>
+          <p style={{ fontSize: 13, color: '#B8860B', margin: 0 }}>
+            💡 前往 <span onClick={() => navigate('/settings')} style={{ color: '#B8860B', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>宝宝设置</span> 填写出生日期和性别，即可查看生长参考曲线
+          </p>
+        </div>
+      )}
 
+      {/* 参考标准切换按钮 */}
+      {hasBirthDate && hasRecords && (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+          <button
+            className={`btn ${standardType === 'who' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => setStandardType('who')}
+            style={{ fontSize: 12 }}
+          >
+            🌍 WHO 标准
+          </button>
+          <button
+            className={`btn ${standardType === 'china' ? 'btn-primary' : 'btn-secondary'} btn-sm`}
+            onClick={() => setStandardType('china')}
+            style={{ fontSize: 12 }}
+          >
+            🇨🇳 中国卫健委
+          </button>
+        </div>
+      )}
+
+      {/* 生长曲线图 */}
+      {hasBirthDate && hasRecords && (
+        <GrowthChart
+          records={records}
+          birthDate={profile.birthDate}
+          gender={profile.gender || 'girl'}
+          standardType={standardType}
+        />
+      )}
+
+
+      {/* 空状态 */}
       {records.length === 0 && (
         <div className="empty-state">
           <div className="icon">📏</div>
@@ -72,6 +124,7 @@ export default function Growth() {
         </div>
       )}
 
+      {/* 记录列表 */}
       <div className="card">
         {records.slice().reverse().map(r => (
           <div key={r.id} className="record-item">
@@ -93,6 +146,7 @@ export default function Growth() {
         ))}
       </div>
 
+      {/* 模态表单 */}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>

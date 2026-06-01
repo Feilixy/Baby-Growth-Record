@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm create *)",
+      "Read(//Users/wangyufei/程序/**)",
+      "Bash(npx create-vite@latest *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "WebFetch(domain:localhost)",
+      "Bash(curl -s http://localhost:5173/)",
+      "Bash(git --version)",
+      "Bash(git config *)",
+      "Read(//Users/wangyufei/**)",
+      "Bash(gh auth *)",
+      "Bash(ssh-keygen *)",
+      "Bash(ssh *)",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(git commit *)"
+    ]
+  }
+}

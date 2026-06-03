@@ -13,6 +13,7 @@ export default function Settings() {
     gender: 'girl',
   });
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const { pinCode, clearPin: logoutPin, firebaseReady } = usePin();
   const navigate = useNavigate();
 
@@ -34,13 +35,15 @@ export default function Settings() {
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.birthDate) return;
+    if (!firebaseReady) { setSaveError("云端未连接，请刷新页面重试"); setTimeout(() => setSaveError(""), 4000); return; }
     try {
       await saveProfile(form);
       setProfile(form);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
-      console.error('保存失败:', e);
+      setSaveError('保存失败: ' + (e.message || '请检查网络'));
+      setTimeout(() => setSaveError(''), 4000);
     }
   };
 
@@ -114,6 +117,7 @@ export default function Settings() {
         <button className="btn btn-primary btn-block" onClick={handleSave}>
           {saved ? '已保存 ✅' : '保存设置'}
         </button>
+        {saveError && <div style={{color: "#e53e3e", fontSize: 13, marginTop: 8, textAlign: "center"}}>{saveError}</div>}
       </div>
 
       {/* 家庭码信息 */}

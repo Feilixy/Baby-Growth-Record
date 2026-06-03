@@ -6,11 +6,20 @@ import { Plus, Trash2 } from 'lucide-react';
 
 export default function Milestones() {
   const [milestones, setMilestones] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ date: '', title: '', category: 'other', note: '' });
 
-  const refresh = useCallback(() => {
-    setMilestones(getMilestones());
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const m = await getMilestones();
+      setMilestones(m);
+    } catch (e) {
+      console.error('Milestones 加载失败:', e);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -34,21 +43,39 @@ export default function Milestones() {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.date || !form.title.trim()) return;
-    addMilestone(form);
-    setShowForm(false);
-    refresh();
+    setSaving(true);
+    try {
+      await addMilestone(form);
+      setShowForm(false);
+      await refresh();
+    } catch (e) {
+      console.error('保存失败:', e);
+    }
+    setSaving(false);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('确定删除这条里程碑吗？')) {
-      deleteMilestone(id);
-      refresh();
+  const handleDelete = async (id) => {
+    if (!window.confirm('确定删除这条里程碑吗？')) return;
+    try {
+      await deleteMilestone(id);
+      await refresh();
+    } catch (e) {
+      console.error('删除失败:', e);
     }
   };
 
   const getCategory = (key) => milestoneCategories.find(c => c.key === key);
+
+  if (loading) {
+    return (
+      <div className="loading-screen fade-in">
+        <div className="loading-spinner" />
+        <span>加载中...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="fade-in">
@@ -97,7 +124,7 @@ export default function Milestones() {
       </div>
 
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <div className="modal-overlay" onClick={() => !saving && setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title">记录里程碑 ⭐</div>
 
@@ -139,7 +166,9 @@ export default function Milestones() {
                 value={form.note}
                 onChange={e => setForm({ ...form, note: e.target.value })} />
             </div>
-            <button className="btn btn-primary btn-block" onClick={handleSave}>保存里程碑</button>
+            <button className="btn btn-primary btn-block" onClick={handleSave} disabled={saving}>
+              {saving ? '保存中...' : '保存里程碑'}
+            </button>
           </div>
         </div>
       )}

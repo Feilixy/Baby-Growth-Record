@@ -5,12 +5,21 @@ import { Plus, Trash2 } from 'lucide-react';
 
 export default function Photos() {
   const [photos, setPhotos] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [form, setForm] = useState({ date: '', dataUrl: '', description: '' });
 
-  const refresh = useCallback(() => {
-    setPhotos(getPhotos());
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = await getPhotos();
+      setPhotos(p);
+    } catch (e) {
+      console.error('Photos 加载失败:', e);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
@@ -20,7 +29,6 @@ export default function Photos() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (ev) => {
-      // Compress large images
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
@@ -38,18 +46,28 @@ export default function Photos() {
     reader.readAsDataURL(file);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.date || !form.dataUrl) return;
-    addPhoto(form);
-    setShowForm(false);
-    setForm({ date: '', dataUrl: '', description: '' });
-    refresh();
+    setSaving(true);
+    try {
+      await addPhoto(form);
+      setShowForm(false);
+      setForm({ date: '', dataUrl: '', description: '' });
+      await refresh();
+    } catch (e) {
+      console.error('保存失败:', e);
+    }
+    setSaving(false);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('确定删除这张照片吗？')) {
-      deletePhoto(id);
-      refresh();
+  const handleDelete = async (id) => {
+    if (!window.confirm('确定删除这张照片吗？')) return;
+    try {
+      await deletePhoto(id);
+      setSelectedPhoto(null);
+      await refresh();
+    } catch (e) {
+      console.error('删除失败:', e);
     }
   };
 
@@ -57,6 +75,15 @@ export default function Photos() {
     setForm({ date: new Date().toISOString().split('T')[0], dataUrl: '', description: '' });
     setShowForm(true);
   };
+
+  if (loading) {
+    return (
+      <div className="loading-screen fade-in">
+        <div className="loading-spinner" />
+        <span>加载中...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="fade-in">
@@ -98,7 +125,7 @@ export default function Photos() {
           <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: 12 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
               <span style={{ fontSize: 13, color: 'var(--text-light)' }}>{formatDate(selectedPhoto.date)}</span>
-              <button className="btn btn-danger btn-sm" onClick={() => { handleDelete(selectedPhoto.id); setSelectedPhoto(null); }}>
+              <button className="btn btn-danger btn-sm" onClick={() => handleDelete(selectedPhoto.id)}>
                 <Trash2 size={14} /> 删除
               </button>
             </div>
@@ -112,7 +139,7 @@ export default function Photos() {
 
       {/* Add form modal */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <div className="modal-overlay" onClick={() => !saving && setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title">添加照片 📷</div>
             <div className="form-group">
@@ -132,7 +159,9 @@ export default function Photos() {
               <input className="form-input" type="text" placeholder="例如: 第一次微笑 😊" value={form.description}
                 onChange={e => setForm({ ...form, description: e.target.value })} />
             </div>
-            <button className="btn btn-primary btn-block" onClick={handleSave}>保存照片</button>
+            <button className="btn btn-primary btn-block" onClick={handleSave} disabled={saving}>
+              {saving ? '保存中...' : '保存照片'}
+            </button>
           </div>
         </div>
       )}

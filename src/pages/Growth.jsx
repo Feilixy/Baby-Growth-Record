@@ -9,21 +9,28 @@ const emptyForm = { date: '', height: '', weight: '' };
 
 export default function Growth() {
   const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
   const [profile, setProfile] = useState(null);
   const [standardType, setStandardType] = useState('who');
+  const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
 
-  const refresh = useCallback(() => {
-    setRecords(getGrowthRecords());
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [r, p] = await Promise.all([getGrowthRecords(), getProfile()]);
+      setRecords(r);
+      setProfile(p);
+    } catch (e) {
+      console.error('Growth 加载失败:', e);
+    }
+    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    refresh();
-    setProfile(getProfile());
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   const openAdd = () => {
     setEditing(null);
@@ -37,31 +44,49 @@ export default function Growth() {
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.date || !form.height || !form.weight) return;
+    setSaving(true);
     const data = {
       date: form.date,
       height: parseFloat(form.height),
       weight: parseFloat(form.weight),
     };
-    if (editing) {
-      updateGrowthRecord(editing.id, data);
-    } else {
-      addGrowthRecord(data);
+    try {
+      if (editing) {
+        await updateGrowthRecord(editing.id, data);
+      } else {
+        await addGrowthRecord(data);
+      }
+      setShowForm(false);
+      await refresh();
+    } catch (e) {
+      console.error('保存失败:', e);
     }
-    setShowForm(false);
-    refresh();
+    setSaving(false);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('确定删除这条记录吗？')) {
-      deleteGrowthRecord(id);
-      refresh();
+  const handleDelete = async (id) => {
+    if (!window.confirm('确定删除这条记录吗？')) return;
+    try {
+      await deleteGrowthRecord(id);
+      await refresh();
+    } catch (e) {
+      console.error('删除失败:', e);
     }
   };
 
   const hasBirthDate = profile?.birthDate;
   const hasRecords = records.length >= 2;
+
+  if (loading) {
+    return (
+      <div className="loading-screen fade-in">
+        <div className="loading-spinner" />
+        <span>加载中...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="fade-in">
@@ -114,7 +139,6 @@ export default function Growth() {
         />
       )}
 
-
       {/* 空状态 */}
       {records.length === 0 && (
         <div className="empty-state">
@@ -125,30 +149,32 @@ export default function Growth() {
       )}
 
       {/* 记录列表 */}
-      <div className="card">
-        {records.slice().reverse().map(r => (
-          <div key={r.id} className="record-item">
-            <div className="record-info">
-              <div className="record-date">{formatDate(r.date)}</div>
-              <div className="record-value">
-                身高 {r.height} cm · 体重 {r.weight} kg
+      {records.length > 0 && (
+        <div className="card">
+          {records.slice().reverse().map(r => (
+            <div key={r.id} className="record-item">
+              <div className="record-info">
+                <div className="record-date">{formatDate(r.date)}</div>
+                <div className="record-value">
+                  身高 {r.height} cm · 体重 {r.weight} kg
+                </div>
+              </div>
+              <div className="record-actions">
+                <button className="btn btn-secondary btn-sm" onClick={() => openEdit(r)}>
+                  <Pencil size={14} />
+                </button>
+                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>
+                  <Trash2 size={14} />
+                </button>
               </div>
             </div>
-            <div className="record-actions">
-              <button className="btn btn-secondary btn-sm" onClick={() => openEdit(r)}>
-                <Pencil size={14} />
-              </button>
-              <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* 模态表单 */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <div className="modal-overlay" onClick={() => !saving && setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title">
               {editing ? '编辑记录' : '添加身高体重'} 📏
@@ -165,8 +191,8 @@ export default function Growth() {
               <label className="form-label">体重 (kg)</label>
               <input className="form-input" type="number" step="0.1" placeholder="例如: 3.5" value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} />
             </div>
-            <button className="btn btn-primary btn-block" onClick={handleSave}>
-              {editing ? '保存修改' : '添加记录'}
+            <button className="btn btn-primary btn-block" onClick={handleSave} disabled={saving}>
+              {saving ? '保存中...' : (editing ? '保存修改' : '添加记录')}
             </button>
           </div>
         </div>

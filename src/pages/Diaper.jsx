@@ -11,19 +11,25 @@ const typeOptions = [
 
 export default function Diaper() {
   const [records, setRecords] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const [form, setForm] = useState({ date: todayStr(), time: nowTimeStr(), type: 'pee' });
 
-  const refresh = useCallback(() => {
-    setRecords(getDiaperRecords());
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await getDiaperRecords();
+      setRecords(r);
+    } catch (e) {
+      console.error('Diaper 加载失败:', e);
+    }
+    setLoading(false);
   }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
   const filteredRecords = records.filter(r => r.date === selectedDate);
-
-  // Stats for selected date
   const peeCount = filteredRecords.filter(r => r.type === 'pee' || r.type === 'both').length;
   const poopCount = filteredRecords.filter(r => r.type === 'poop' || r.type === 'both').length;
 
@@ -32,22 +38,43 @@ export default function Diaper() {
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.date || !form.time) return;
-    addDiaperRecord(form);
-    setShowForm(false);
-    refresh();
+    try {
+      await addDiaperRecord(form);
+      setShowForm(false);
+      await refresh();
+    } catch (e) {
+      console.error('保存失败:', e);
+    }
   };
 
-  const handleDelete = (id) => {
-    deleteDiaperRecord(id);
-    refresh();
+  const handleDelete = async (id) => {
+    try {
+      await deleteDiaperRecord(id);
+      await refresh();
+    } catch (e) {
+      console.error('删除失败:', e);
+    }
   };
 
-  const quickAdd = (type) => {
-    addDiaperRecord({ date: selectedDate, time: nowTimeStr(), type });
-    refresh();
+  const quickAdd = async (type) => {
+    try {
+      await addDiaperRecord({ date: selectedDate, time: nowTimeStr(), type });
+      await refresh();
+    } catch (e) {
+      console.error('快速添加失败:', e);
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="loading-screen fade-in">
+        <div className="loading-spinner" />
+        <span>加载中...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="fade-in">

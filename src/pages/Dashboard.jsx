@@ -1,37 +1,52 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getProfile, getMilestones } from '../utils/storage';
+import { getProfile, getMilestones, getDiaperRecords } from '../utils/storage';
 import { getAge, todayStr } from '../utils/dateUtils';
-import { getDiaperRecords } from '../utils/storage';
 import { useNavigate } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 
 export default function Dashboard() {
-  const [profile, setProfile] = useState(getProfile());
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [age, setAge] = useState(null);
   const [diaperStats, setDiaperStats] = useState({ pee: 0, poop: 0, both: 0 });
   const [latestMilestone, setLatestMilestone] = useState(null);
   const navigate = useNavigate();
 
-  const refresh = useCallback(() => {
-    const p = getProfile();
-    setProfile(p);
-    if (p?.birthDate) {
-      setAge(getAge(p.birthDate));
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = await getProfile();
+      setProfile(p);
+      if (p?.birthDate) {
+        setAge(getAge(p.birthDate));
+      } else {
+        setAge(null);
+      }
+
+      const today = todayStr();
+      const allDiaper = (await getDiaperRecords()).filter(r => r.date === today);
+      const pee = allDiaper.filter(r => r.type === 'pee' || r.type === 'both').length;
+      const poop = allDiaper.filter(r => r.type === 'poop' || r.type === 'both').length;
+      setDiaperStats({ pee, poop });
+
+      const milestones = await getMilestones();
+      setLatestMilestone(milestones.length > 0 ? milestones[0] : null);
+    } catch (e) {
+      console.error('Dashboard 加载失败:', e);
     }
-
-    const today = todayStr();
-    const allDiaper = getDiaperRecords().filter(r => r.date === today);
-    const pee = allDiaper.filter(r => r.type === 'pee' || r.type === 'both').length;
-    const poop = allDiaper.filter(r => r.type === 'poop' || r.type === 'both').length;
-    setDiaperStats({ pee, poop });
-
-    const milestones = getMilestones();
-    setLatestMilestone(milestones.length > 0 ? milestones[0] : null);
+    setLoading(false);
   }, []);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  if (loading) {
+    return (
+      <div className="loading-screen fade-in">
+        <div className="loading-spinner" />
+        <span>加载中...</span>
+      </div>
+    );
+  }
 
   if (!profile) {
     return (

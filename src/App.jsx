@@ -1,5 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
+import { usePin } from './utils/PinContext';
 import Layout from './components/Layout';
+import PinGuard from './components/PinGuard';
 import Dashboard from './pages/Dashboard';
 import Growth from './pages/Growth';
 import Photos from './pages/Photos';
@@ -8,6 +10,12 @@ import Diaper from './pages/Diaper';
 import Settings from './pages/Settings';
 
 export default function App() {
+  const { isAuthenticated } = usePin();
+
+  if (!isAuthenticated) {
+    return <PinGuard />;
+  }
+
   return (
     <Routes>
       <Route element={<Layout />}>

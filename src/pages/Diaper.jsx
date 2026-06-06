@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getDiaperRecords, addDiaperRecord, deleteDiaperRecord } from '../utils/storage';
 import { formatDate, formatTime, todayStr, nowTimeStr } from '../utils/dateUtils';
+import DiaperTrendChart from '../components/DiaperTrendChart';
+import { usePin } from '../utils/PinContext';
 import { Plus, Trash2 } from 'lucide-react';
 
 const typeOptions = [
@@ -10,6 +12,8 @@ const typeOptions = [
 ];
 
 export default function Diaper() {
+  const { isAllowed } = usePin();
+  const canEdit = isAllowed('editor');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -82,6 +86,9 @@ export default function Diaper() {
         <h1 className="page-title"><span className="emoji">🧷</span> 大小便记录</h1>
       </div>
 
+      {/* Trend chart */}
+      <DiaperTrendChart records={records} />
+
       {/* Date selector */}
       <div className="card" style={{ textAlign: 'center' }}>
         <input
@@ -106,6 +113,7 @@ export default function Diaper() {
       </div>
 
       {/* Quick add buttons */}
+      {canEdit && (
       <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
         {typeOptions.map(t => (
           <button key={t.key} className="btn btn-secondary" style={{ flex: 1 }}
@@ -114,6 +122,7 @@ export default function Diaper() {
           </button>
         ))}
       </div>
+      )}
 
       {filteredRecords.length === 0 ? (
         <div className="empty-state">
@@ -134,9 +143,11 @@ export default function Diaper() {
                   {t?.label?.replace(/ .*$/, '')}
                 </div>
                 <div className="record-actions" style={{ marginLeft: 'auto' }}>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>
-                    <Trash2 size={14} />
-                  </button>
+                  {canEdit && (
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -145,11 +156,13 @@ export default function Diaper() {
       )}
 
       {/* Manual add */}
+      {canEdit && (
       <button className="btn btn-primary btn-block" onClick={openAdd} style={{ marginTop: 12 }}>
         <Plus size={16} /> 手动添加记录
       </button>
+      )}
 
-      {showForm && (
+      {canEdit && showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-title">添加大小便记录 🧷</div>

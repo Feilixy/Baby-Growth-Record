@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPhotos, addPhoto, deletePhoto } from '../utils/storage';
 import { formatDate } from '../utils/dateUtils';
+import { usePin } from '../utils/PinContext';
 import { Plus, Trash2 } from 'lucide-react';
 
 export default function Photos() {
+  const { isAllowed } = usePin();
+  const canEdit = isAllowed('editor');
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -89,16 +92,18 @@ export default function Photos() {
     <div className="fade-in">
       <div className="page-header">
         <h1 className="page-title"><span className="emoji">📷</span> 照片墙</h1>
-        <button className="btn btn-primary btn-sm" onClick={openAdd}>
-          <Plus size={16} /> 添加
-        </button>
+        {canEdit && (
+          <button className="btn btn-primary btn-sm" onClick={openAdd}>
+            <Plus size={16} /> 添加
+          </button>
+        )}
       </div>
 
       {photos.length === 0 && (
         <div className="empty-state">
           <div className="icon">📷</div>
           <p>还没有照片，快来记录宝宝的可爱瞬间吧 🍼</p>
-          <button className="btn btn-primary" onClick={openAdd}>上传第一张照片</button>
+          {canEdit && <button className="btn btn-primary" onClick={openAdd}>上传第一张照片</button>}
         </div>
       )}
 

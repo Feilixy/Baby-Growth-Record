@@ -2,12 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getGrowthRecords, addGrowthRecord, updateGrowthRecord, deleteGrowthRecord, getProfile } from '../utils/storage';
 import { formatDate } from '../utils/dateUtils';
+import { usePin } from '../utils/PinContext';
 import GrowthChart from '../components/GrowthChart';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
 const emptyForm = { date: '', height: '', weight: '' };
 
 export default function Growth() {
+  const { isAllowed } = usePin();
+  const canEdit = isAllowed('editor');
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -92,9 +95,11 @@ export default function Growth() {
     <div className="fade-in">
       <div className="page-header">
         <h1 className="page-title"><span className="emoji">📏</span> 身高体重</h1>
-        <button className="btn btn-primary btn-sm" onClick={openAdd}>
-          <Plus size={16} /> 记录
-        </button>
+        {canEdit && (
+          <button className="btn btn-primary btn-sm" onClick={openAdd}>
+            <Plus size={16} /> 记录
+          </button>
+        )}
       </div>
 
       {/* 未设置出生日期提示 */}
@@ -144,7 +149,7 @@ export default function Growth() {
         <div className="empty-state">
           <div className="icon">📏</div>
           <p>还没有身高体重记录，开始记录宝宝的成长吧</p>
-          <button className="btn btn-primary" onClick={openAdd}>添加第一条记录</button>
+          {canEdit && <button className="btn btn-primary" onClick={openAdd}>添加第一条记录</button>}
         </div>
       )}
 
@@ -159,14 +164,16 @@ export default function Growth() {
                   身高 {r.height} cm · 体重 {r.weight} kg
                 </div>
               </div>
-              <div className="record-actions">
-                <button className="btn btn-secondary btn-sm" onClick={() => openEdit(r)}>
-                  <Pencil size={14} />
-                </button>
-                <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
+              {canEdit && (
+                <div className="record-actions">
+                  <button className="btn btn-secondary btn-sm" onClick={() => openEdit(r)}>
+                    <Pencil size={14} />
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(r.id)}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

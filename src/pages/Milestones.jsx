@@ -2,9 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { getMilestones, addMilestone, deleteMilestone } from '../utils/storage';
 import { formatDate } from '../utils/dateUtils';
 import { milestoneCategories, defaultMilestoneSuggestions } from '../data/defaultMilestones';
+import { usePin } from '../utils/PinContext';
 import { Plus, Trash2 } from 'lucide-react';
 
 export default function Milestones() {
+  const { isAllowed } = usePin();
+  const canEdit = isAllowed('editor');
   const [milestones, setMilestones] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -81,16 +84,18 @@ export default function Milestones() {
     <div className="fade-in">
       <div className="page-header">
         <h1 className="page-title"><span className="emoji">⭐</span> 成长里程碑</h1>
-        <button className="btn btn-primary btn-sm" onClick={openAdd}>
-          <Plus size={16} /> 记录
-        </button>
+        {canEdit && (
+          <button className="btn btn-primary btn-sm" onClick={openAdd}>
+            <Plus size={16} /> 记录
+          </button>
+        )}
       </div>
 
       {milestones.length === 0 && (
         <div className="empty-state">
           <div className="icon">⭐</div>
           <p>还没有里程碑记录，记录宝宝的每一个重要时刻</p>
-          <button className="btn btn-primary" onClick={openAdd}>添加第一个里程碑</button>
+          {canEdit && <button className="btn btn-primary" onClick={openAdd}>添加第一个里程碑</button>}
         </div>
       )}
 
@@ -113,9 +118,11 @@ export default function Milestones() {
                     </div>
                     {m.note && <p style={{ fontSize: 14, marginTop: 6, color: 'var(--text)' }}>{m.note}</p>}
                   </div>
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>
-                    <Trash2 size={14} />
-                  </button>
+                  {canEdit && (
+                    <button className="btn btn-danger btn-sm" onClick={() => handleDelete(m.id)}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

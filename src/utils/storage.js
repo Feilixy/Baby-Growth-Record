@@ -120,13 +120,25 @@ async function deleteItem(subcollection, id) {
 
 export async function checkPinExists(pin) {
   const db = getDb();
-  if (!db) return false;
+  if (!db) {
+    // 离线模式：检查 localStorage 缓存
+    try {
+      return localStorage.getItem('cache_' + pin + '_profile') !== null;
+    } catch { return false; }
+  }
   try {
     const ref = doc(db, 'data', pin, 'profile', 'default');
     const snap = await getDoc(ref);
-    return snap.exists();
+    if (snap.exists()) return true;
+    // Firestore 中没有，检查本地缓存
+    try {
+      return localStorage.getItem('cache_' + pin + '_profile') !== null;
+    } catch { return false; }
   } catch {
-    return false;
+    // Firestore 读取失败，回退到本地缓存
+    try {
+      return localStorage.getItem('cache_' + pin + '_profile') !== null;
+    } catch { return false; }
   }
 }
 
@@ -184,26 +196,35 @@ export async function migrateFromLocalToFirestore() {
 // ─── Baby Profile ───────────────────────────────────────────
 
 export async function getProfile() {
+  const cached = readCache('profile');
+
   try {
     const ref = singleDocRef('profile', 'default');
-    if (!ref) throw new Error('Firebase 未配置');
+    if (!ref) return cached || null;
     const snap = await getDoc(ref);
     if (snap.exists()) {
       const data = snap.data();
+      // 优先使用本地缓存中的 users 和 adminPassword（刚写的数据更及时）
+      if (cached?.users && Object.keys(cached.users).length > 0) {
+        data.users = cached.users;
+      }
+      if (cached?.adminPassword) {
+        data.adminPassword = cached.adminPassword;
+      }
       writeCache('profile', data);
       return data;
     }
-    return readCache('profile') || null;
+    return cached || null;
   } catch {
-    return readCache('profile') || null;
+    return cached || null;
   }
 }
 
 export async function saveProfile(profile) {
   const ref = singleDocRef('profile', 'default');
   if (!ref) throw new Error('Firebase 未配置');
-  await setDoc(ref, profile);
   writeCache('profile', profile);
+  await setDoc(ref, profile);
 }
 
 // ─── Growth Records ─────────────────────────────────────────
@@ -269,4 +290,40 @@ export async function addDiaperRecord(record) {
 
 export async function deleteDiaperRecord(id) {
   await deleteItem('diaper_records', id);
+}
+
+// ─── Daily Todos ──────────────────────────────────────────
+
+export async function getDailyTodos() {
+  return getAllSorted('daily_todos', (a, b) => a.order - b.order);
+}
+
+export async function addDailyTodo(todo) {
+  return await addItem('daily_todos', todo);
+}
+
+export async function updateDailyTodo(id, data) {
+  await updateItem('daily_todos', id, data);
+}
+
+export async function deleteDailyTodo(id) {
+  await deleteItem('daily_todos', id);
+}
+
+// ─── Upcoming Todos ──────────────────────────────────────
+
+export async function getUpcomingTodos() {
+  return getAllSorted('upcoming_todos', (a, b) => a.order - b.order);
+}
+
+export async function addUpcomingTodo(todo) {
+  return await addItem('upcoming_todos', todo);
+}
+
+export async function updateUpcomingTodo(id, data) {
+  await updateItem('upcoming_todos', id, data);
+}
+
+export async function deleteUpcomingTodo(id) {
+  await deleteItem('upcoming_todos', id);
 }

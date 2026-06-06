@@ -28,7 +28,42 @@ npm run deploy   # 构建 + 推送到 GitHub Pages（gh-pages 分支）
 - **recharts** 图表库，**lucide-react** 图标，**date-fns** 日期工具
 - **数据持久化**: Firebase Firestore（主） + localStorage（离线缓存/降级）
 - **认证**: PIN 码（4-6 位数字），存储在 Firestore 的 `data/{pin}/` 路径下
-- CSS 变量主题系统（粉色系），`ZCOOL KuaiLe` 可爱字体
+- CSS 变量主题系统（粉色系），楷体系列可爱字体（`--font-cute`）
+
+## 性能优化（2026-06-06 已完成）
+
+### 构建优化
+- **Firebase 拆分为独立 chunk**（`vite.config.js` 中 `manualChunks` 配置）：
+  - 主 JS 包从 740 kB（193 kB gzip）降至 195 kB（**63 kB gzip**）
+  - Firebase SDK（544 kB / 130 kB gzip）在后台按需加载，不阻塞首屏渲染
+- **代码分割**：六个页面使用 `React.lazy()` 按需加载，首屏只下载当前页面代码
+- 其他页面 chunk 均为 4-19 kB，极小
+
+### 缓存策略
+- **三级缓存**：内存 Map → localStorage → Firestore，逐级回退
+- **缓存优先读取**：所有数据读取先从内存/本地缓存返回（< 5ms），Firestore 后台静默同步刷新
+- **写入后自动失效**：增/删/改操作自动清除对应缓存，保证数据一致性
+- **Firestore 离线持久化**：`enableMultiTabIndexedDbPersistence` 启用 IndexedDB 缓存
+
+### Firebase 连接优化
+- **匿名登录不阻塞**：`signInAnonymously()` 改为 fire-and-forget，`firebaseReady` 立即为 true
+- **HTTP 长轮询**：`experimentalForceLongPolling: true` 替代 WebSocket，更好穿越防火墙
+- **无限制缓存**：`cacheSizeBytes: CACHE_SIZE_UNLIMITED`
+
+### 渲染优化
+- **启动屏**：`index.html` 内置 CSS 动画启动屏（👶 宝宝成长记录 + 加载条），JS 加载前即刻显示
+- **无全屏 loading**：Dashboard 始终立即渲染，各区块独立加载，数据到达后自动填充
+- **profile 不阻塞整页**：profile=null 时显示&#34;正在加载宝宝信息...&#34;骨架，其他区块正常展示
+- **Google Fonts 完全移除**：ZCOOL KuaiLe 在中国被墙，改用系统内置楷体（`Kaiti SC / KaiTi`），零外部资源依赖
+
+### 预取策略
+- **PIN 验证时预取**：`handleSetPin` 同步启动 5 个集合的数据读取，Dashboard 挂载时数据已在传输中
+- **`firebaseReady` 依赖修复**：Dashboard 的 `refresh()` 依赖 `[today, firebaseReady]`，Firebase 就绪后自动重新拉取数据
+
+### 禁止事项（性能角度）
+- 不要添加新的外部字体/外部 CSS 资源（境外 CDN 从中国加载极慢）
+- 不要在首页使用全屏 loading 指示器
+- 不要在数据读取路径上等待 Firestore 响应
 
 ## ⚠️ 关键注意事项
 
@@ -75,8 +110,10 @@ Firestore 路径结构：`data/{pin}/{collection}/{docId}`
 | `photos/{id}` | `{ id, date, data, note }` | data 为 Base64 图片 |
 | `milestones/{id}` | `{ id, date, title, note }` | 里程碑事件 |
 | `diaper_records/{id}` | `{ id, date, time, type }` | type: `'pee'`/`'poop'`/`'both'` |
+| `daily_todos/{id}` | `{ id, text, period, order, lastCompletedDate }` | 每日待办，分上午/下午/晚上，lastCompletedDate 控制每日重置 |
+| `upcoming_todos/{id}` | `{ id, text, order, targetDate, done, completedAt }` | 近期待办，带完成日期，done 后移入已完成列表 |
 
-`storage.js` 中每个操作先写 Firestore，成功后将数据写入 `localStorage` 作为离线缓存。读取时优先 Firestore，失败则降级到缓存。`getDb()` 返回 null 表示 Firebase 未配置。
+`storage.js` 使用三级缓存策略：内存 Map → localStorage → Firestore 后台同步。所有读取优先从缓存返回（< 5ms），Firestore 在后台静默刷新。写入时先写缓存再写 Firestore（fire-and-forget）。`getDb()` 返回 null 表示 Firebase 未配置。
 
 ## Firebase 配置
 

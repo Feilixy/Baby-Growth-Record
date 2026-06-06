@@ -15,7 +15,7 @@ const PERIODS = [
 const MAX_PERIOD_ITEMS = 5;
 
 export default function Dashboard() {
-  const { isAllowed } = usePin();
+  const { isAllowed, firebaseReady } = usePin();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [forceShow, setForceShow] = useState(false);
@@ -73,7 +73,7 @@ export default function Dashboard() {
       console.error('Dashboard 加载失败:', e);
     }
     setLoading(false);
-  }, [today]);
+  }, [today, firebaseReady]);
 
   useEffect(() => { refresh(); }, [refresh]);
 
@@ -182,15 +182,8 @@ export default function Dashboard() {
     } catch {}
   };
 
-  // 没有任何缓存时首次加载才显示骨架屏，最多等 500ms
-  if (!forceShow && loading && !profile && !milestones.length && !dailyTodos.length && !upcomingTodos.length) {
-    return (
-      <div className="loading-screen fade-in">
-        <div className="loading-spinner" />
-        <span>加载中...</span>
-      </div>
-    );
-  }
+  // 无 loading 屏 — 始终立即渲染，数据加载中显示各区块骨架
+
 
   if (!profile) {
     return (

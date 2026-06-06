@@ -41,7 +41,9 @@ async function readWithCache(subcollection, sortFn) {
     return copy;
   }
 
-  return refreshFromFirestore(subcollection, sortFn);
+  // 无缓存 → 不阻塞，后台同步并返回空数组
+  refreshFromFirestore(subcollection).catch(() => {});
+  return [];
 }
 
 // 后台从 Firestore 刷新缓存（带请求去重）
@@ -268,7 +270,9 @@ export async function getProfile() {
     return localCached;
   }
 
-  return refreshProfile();
+  // 无缓存 → 不阻塞，后台同步并返回 null
+  refreshProfile().catch(() => {});
+  return null;
 }
 
 async function refreshProfile() {

@@ -185,21 +185,6 @@ export default function Dashboard() {
   // 无 loading 屏 — 始终立即渲染，数据加载中显示各区块骨架
 
 
-  if (!profile) {
-    return (
-      <div className="fade-in">
-        <div className="empty-state">
-          <div className="icon">👶</div>
-          <h2 style={{ fontFamily: 'var(--font-cute)', fontSize: 22, marginBottom: 8 }}>欢迎来到宝宝成长记录</h2>
-          <p>请先设置宝宝信息，开始记录成长的每一个美好瞬间 💕</p>
-          <button className="btn btn-primary" onClick={() => navigate('/settings')}>
-            开始设置
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // ─── 渲染每日待办 ───
   const renderDailyTodos = () => {
     const getPeriodItems = (periodKey) =>
@@ -446,12 +431,22 @@ export default function Dashboard() {
     <div className="fade-in">
       {/* Baby info header */}
       <div style={{ textAlign: 'center', marginBottom: 16 }}>
-        <div className="dashboard-baby-name">
-          {profile.name} <span style={{ fontSize: 24 }}>🌸</span>
-        </div>
-        {age && <div className="dashboard-baby-age">
-          {age.text} · {profile.gender === 'girl' ? '小公主' : '小王子'} 💕
-        </div>}
+        {profile ? (
+          <>
+            <div className="dashboard-baby-name">
+              {profile.name} <span style={{ fontSize: 24 }}>🌸</span>
+            </div>
+            {age && <div className="dashboard-baby-age">
+              {age.text} · {profile.gender === 'girl' ? '小公主' : '小王子'} 💕
+            </div>}
+          </>
+        ) : (
+          <div style={{ padding: '10px 0' }}>
+            <div className="dashboard-baby-name" style={{ color: '#CCC', fontSize: 16 }}>
+              👶 正在加载宝宝信息...
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 1️⃣ 今日总结 */}

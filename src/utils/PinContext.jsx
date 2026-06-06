@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { initFirebase } from './firebase';
-import { setActivePin, getActivePin, clearPin, getProfile, saveProfile } from './storage';
+import { setActivePin, getActivePin, clearPin, getProfile, saveProfile, getMilestones, getDiaperRecords, getDailyTodos, getUpcomingTodos } from './storage';
 
 const PinContext = createContext(null);
 
@@ -84,7 +84,28 @@ export function PinProvider({ children }) {
     })();
   }, [pinCode, firebaseReady, userName]);
 
+  // PIN + Firebase 就绪后，后台预取所有数据，Dashboard 渲染时数据已在缓存中
+  useEffect(() => {
+    if (!pinCode || !firebaseReady) return;
+    Promise.all([
+      getProfile(),
+      getMilestones(),
+      getDiaperRecords(),
+      getDailyTodos(),
+      getUpcomingTodos(),
+    ]).catch(() => {});
+  }, [pinCode, firebaseReady]);
+
   const handleSetPin = useCallback(async (pin, opts = {}) => {
+    // 先启动数据预取（同步启动异步请求，不阻塞），再设置 PIN
+    // 这样 Dashboard 挂载时数据已经在传输中，甚至可以命中缓存
+    if (firebaseReady) {
+      getProfile().catch(() => {});
+      getMilestones().catch(() => {});
+      getDiaperRecords().catch(() => {});
+      getDailyTodos().catch(() => {});
+      getUpcomingTodos().catch(() => {});
+    }
     setActivePin(pin);
     setPin(pin);
     if (opts.role) {
@@ -95,7 +116,7 @@ export function PinProvider({ children }) {
       setUserName(opts.userName);
       setStoredUser(opts.userName);
     }
-  }, []);
+  }, [firebaseReady]);
 
   const handleClearPin = useCallback(() => {
     clearPin();

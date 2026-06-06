@@ -3,6 +3,70 @@ import {
   collection, doc, getDocs, getDoc, setDoc, updateDoc, deleteDoc
 } from 'firebase/firestore';
 
+// ─── 内存缓存 + 去重队列 ──────────────────────────────────
+
+const sessionCache = new Map();       // 内存缓存：同一次会话跨页面共享
+const pendingFetches = new Map();     // 去重队列：同一集合不重复请求
+
+function getCached(subcollection) {
+  return sessionCache.get(subcollection) || null;
+}
+
+function setCached(subcollection, data) {
+  sessionCache.set(subcollection, data);
+  writeCache(subcollection, data);    // 同步写入 localStorage 作为持久化
+}
+
+function invalidateCache(subcollection) {
+  sessionCache.delete(subcollection);
+  removeCache(subcollection);
+}
+
+// 缓存优先读取：先返回本地缓存（瞬间），再后台同步 Firestore
+async function readWithCache(subcollection, sortFn) {
+  const cached = getCached(subcollection);
+  if (cached) {
+    const copy = [...cached];
+    if (sortFn) copy.sort(sortFn);
+    return copy;
+  }
+
+  const localCached = readCache(subcollection);
+  if (localCached) {
+    setCached(subcollection, localCached);
+    // 不等待，后台刷新
+    refreshFromFirestore(subcollection).catch(() => {});
+    const copy = [...localCached];
+    if (sortFn) copy.sort(sortFn);
+    return copy;
+  }
+
+  return refreshFromFirestore(subcollection, sortFn);
+}
+
+// 后台从 Firestore 刷新缓存（带请求去重）
+async function refreshFromFirestore(subcollection, sortFn) {
+  if (pendingFetches.has(subcollection)) {
+    const items = await pendingFetches.get(subcollection);
+    if (sortFn) items.sort(sortFn);
+    return items;
+  }
+
+  const promise = (async () => {
+    try {
+      const items = await getAllFromFirestore(subcollection);
+      setCached(subcollection, items);
+      if (sortFn) items.sort(sortFn);
+      return items;
+    } finally {
+      pendingFetches.delete(subcollection);
+    }
+  })();
+
+  pendingFetches.set(subcollection, promise);
+  return promise;
+}
+
 // ─── PIN 管理 ───────────────────────────────────────────────
 
 let currentPin = localStorage.getItem('baby_pin');
@@ -79,12 +143,8 @@ async function getAllFromFirestore(subcollection) {
 
 async function getAllSorted(subcollection, sortFn) {
   try {
-    const items = await getAllFromFirestore(subcollection);
-    writeCache(subcollection, items);
-    if (sortFn) items.sort(sortFn);
-    return items;
+    return await readWithCache(subcollection, sortFn);
   } catch {
-    // 离线回退到本地缓存
     const cached = readCache(subcollection);
     if (cached && sortFn) cached.sort(sortFn);
     return cached || [];
@@ -97,8 +157,7 @@ async function addItem(subcollection, item) {
   if (!ref) throw new Error('Firebase 未配置');
   const data = { ...item, id };
   await setDoc(ref, data);
-  // 更新缓存
-  removeCache(subcollection);
+  invalidateCache(subcollection);
   return data;
 }
 
@@ -106,14 +165,14 @@ async function updateItem(subcollection, id, data) {
   const ref = singleDocRef(subcollection, id);
   if (!ref) throw new Error('Firebase 未配置');
   await updateDoc(ref, data);
-  removeCache(subcollection);
+  invalidateCache(subcollection);
 }
 
 async function deleteItem(subcollection, id) {
   const ref = singleDocRef(subcollection, id);
   if (!ref) throw new Error('Firebase 未配置');
   await deleteDoc(ref);
-  removeCache(subcollection);
+  invalidateCache(subcollection);
 }
 
 // ─── 检查 PIN 是否存在 ──────────────────────────────────────
@@ -196,27 +255,43 @@ export async function migrateFromLocalToFirestore() {
 // ─── Baby Profile ───────────────────────────────────────────
 
 export async function getProfile() {
-  const cached = readCache('profile');
+  // 从内存缓存返回（瞬间）
+  const memCached = getCached('profile');
+  if (memCached) return memCached;
 
+  const localCached = readCache('profile');
+  
+  // 返回本地缓存，同时后台刷新
+  if (localCached) {
+    setCached('profile', localCached);
+    refreshProfile().catch(() => {});
+    return localCached;
+  }
+
+  return refreshProfile();
+}
+
+async function refreshProfile() {
   try {
     const ref = singleDocRef('profile', 'default');
-    if (!ref) return cached || null;
+    if (!ref) return getCached('profile') || null;
     const snap = await getDoc(ref);
     if (snap.exists()) {
       const data = snap.data();
-      // 优先使用本地缓存中的 users 和 adminPassword（刚写的数据更及时）
-      if (cached?.users && Object.keys(cached.users).length > 0) {
-        data.users = cached.users;
+      // 合并本地缓存中的 users 和 adminPassword
+      const localCached = readCache('profile');
+      if (localCached?.users && Object.keys(localCached.users).length > 0) {
+        data.users = localCached.users;
       }
-      if (cached?.adminPassword) {
-        data.adminPassword = cached.adminPassword;
+      if (localCached?.adminPassword) {
+        data.adminPassword = localCached.adminPassword;
       }
-      writeCache('profile', data);
+      setCached('profile', data);
       return data;
     }
-    return cached || null;
+    return getCached('profile') || null;
   } catch {
-    return cached || null;
+    return getCached('profile') || null;
   }
 }
 

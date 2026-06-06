@@ -18,6 +18,7 @@ export default function Dashboard() {
   const { isAllowed } = usePin();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [forceShow, setForceShow] = useState(false);
   const [age, setAge] = useState(null);
   const [diaperStats, setDiaperStats] = useState({ pee: 0, poop: 0 });
   const [milestones, setMilestones] = useState([]);
@@ -75,6 +76,12 @@ export default function Dashboard() {
   }, [today]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // 最大等待 500ms 后强制显示页面（即使数据还在加载）
+  useEffect(() => {
+    const timer = setTimeout(() => setForceShow(true), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // ─── 每日待办 ───
   const handleAddDaily = async () => {
@@ -175,7 +182,8 @@ export default function Dashboard() {
     } catch {}
   };
 
-  if (loading) {
+  // 没有任何缓存时首次加载才显示骨架屏，最多等 500ms
+  if (!forceShow && loading && !profile && !milestones.length && !dailyTodos.length && !upcomingTodos.length) {
     return (
       <div className="loading-screen fade-in">
         <div className="loading-spinner" />

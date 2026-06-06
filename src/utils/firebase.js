@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getFirestore, enableMultiTabIndexedDbPersistence } from 'firebase/firestore';
+import { initializeFirestore, enableMultiTabIndexedDbPersistence, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -19,7 +19,11 @@ export function getDb() {
   if (!firebaseConfig.apiKey || !firebaseConfig.projectId) return null;
   if (!db) {
     if (!app) app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
+    const settings = {
+      experimentalForceLongPolling: true,
+      cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+    };
+    db = initializeFirestore(app, settings);
     // 启用离线持久化，后续读取直接从本地缓存加载
     if (!db._persistenceEnabled) {
       enableMultiTabIndexedDbPersistence(db).catch(err => {
@@ -55,8 +59,12 @@ export async function initFirebase() {
   try {
     const a = getAuthInstance();
     if (a) {
-      await signInAnonymously(a);
+      // 不阻塞等待匿名登录完成——Firestore SDK 内部会自动排队等待
+      signInAnonymously(a).catch(e => {
+        console.warn('匿名登录失败（不影响离线数据）:', e.message);
+      });
     }
+    // 立即返回成功，让 firebaseReady 马上变为 true
     return true;
   } catch (e) {
     console.warn('Firebase 初始化失败，将使用本地存储:', e.message);

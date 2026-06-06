@@ -45,20 +45,27 @@ export default function Dashboard() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const p = await getProfile();
+      // 并行读取所有 Firestore 数据
+      const [p, diaperRecords, milestones, dailyTodos, allUpcoming] = await Promise.all([
+        getProfile(),
+        getDiaperRecords(),
+        getMilestones(),
+        getDailyTodos(),
+        getUpcomingTodos(),
+      ]);
+
       setProfile(p);
       if (p?.birthDate) setAge(getAge(p.birthDate));
       else setAge(null);
 
-      const todayDiaper = (await getDiaperRecords()).filter(r => r.date === today);
+      const todayDiaper = diaperRecords.filter(r => r.date === today);
       setDiaperStats({
         pee: todayDiaper.filter(r => r.type === 'pee' || r.type === 'both').length,
         poop: todayDiaper.filter(r => r.type === 'poop' || r.type === 'both').length,
       });
 
-      setMilestones(await getMilestones());
-      setDailyTodos(await getDailyTodos());
-      const allUpcoming = await getUpcomingTodos();
+      setMilestones(milestones);
+      setDailyTodos(dailyTodos);
       setUpcomingTodos(allUpcoming.filter(t => !t.done));
       setCompletedTodos(allUpcoming.filter(t => t.done));
     } catch (e) {

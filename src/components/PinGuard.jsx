@@ -59,7 +59,7 @@ export default function PinGuard() {
         }
         if (exists) {
           try {
-            const profile = await getProfile();
+            const profile = await getProfile({ forceRefresh: true });
             const users = profile?.users || {};
             setFamilyName(profile?.familyName || '');
             const userList = Object.entries(users).sort((a, b) => {
@@ -102,7 +102,7 @@ export default function PinGuard() {
       setActivePin(pin);
 
       try {
-        const profile = await getProfile();
+        const profile = await getProfile({ forceRefresh: true });
         const users = { ...(profile?.users || {}) };
         users[userName.trim()] = { role: 'admin', order: 0 };
         await saveProfile({ ...(profile || {}), users, adminPassword, familyName: familyName.trim() });
@@ -139,7 +139,7 @@ export default function PinGuard() {
     setLoading(true);
     try {
       // 重新获取 profile 直接验证密码
-      const profile = await getProfile();
+      const profile = await getProfile({ forceRefresh: true });
       const storedPassword = profile?.adminPassword;
 
       // 如果未设置管理员密码，允许直接进入（恢复路径 + 兼容旧数据）
@@ -186,7 +186,7 @@ export default function PinGuard() {
     }
     setLoading(true);
     try {
-      const profile = await getProfile();
+      const profile = await getProfile({ forceRefresh: true });
       const users = { ...(profile?.users || {}) };
       await saveProfile({ ...(profile || {}), users, adminPassword: newAdminPassword, familyName: familyName.trim() });
       setActivePin(pin);

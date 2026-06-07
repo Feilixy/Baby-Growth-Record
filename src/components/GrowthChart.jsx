@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useState, useRef, useMemo, useCallback } from 'react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -32,50 +32,51 @@ function CustomXTick(props) {
   );
 }
 
-// 自定义 Tooltip
-function CustomTooltip({ active, payload, label: week, recordMap, metric }) {
-  if (!active || !payload || payload.length === 0) return null;
-
-  const record = recordMap?.[week];
+// 点击触发的浮动 Tooltip，不依赖 recharts Tooltip
+function FloatingTooltip({ record, metric, week, standardType, genderKey, style }) {
   const unit = metric === 'height' ? 'cm' : 'kg';
-  const dataKey = metric;
+  const label = metric === 'height' ? '身高' : '体重';
 
-  // 从 payload 中提取参考值
-  const getRefVal = (pKey) => {
-    const entry = payload.find(p => p.dataKey === `${pKey}_${metric === 'height' ? 'h' : 'w'}`);
-    return entry?.value ?? null;
-  };
+  const refValues = useMemo(() => {
+    const h = getReferenceValues(standardType, genderKey, 'height', week);
+    const w = getReferenceValues(standardType, genderKey, 'weight', week);
+    return { height: h, weight: w };
+  }, [standardType, genderKey, week]);
+
+  const ref = metric === 'height' ? refValues.height : refValues.weight;
 
   return (
     <div style={{
+      position: 'absolute',
       background: '#fff',
       borderRadius: 12,
       border: 'none',
-      boxShadow: '0 2px 12px rgba(180,160,200,0.25)',
+      boxShadow: '0 4px 20px rgba(180,160,200,0.3)',
       padding: '10px 14px',
       fontSize: 12,
       lineHeight: 1.6,
       minWidth: 180,
+      zIndex: 100,
+      pointerEvents: 'none',
+      ...style,
     }}>
       {/* 标题行 */}
       <div style={{ fontWeight: 600, marginBottom: 4, color: '#6b5b7b', fontSize: 13 }}>
-        📅 {record ? `${record.dateLabel} · 第${week}周` : `第${week}周（无记录）`}
+        📅 {record.dateLabel} · 第{week}周
       </div>
 
       {/* 宝宝实际值 */}
-      {record && (
-        <div style={{
-          background: '#fdf2f8', borderRadius: 8, padding: '4px 8px', marginBottom: 6,
-          fontWeight: 600, color: '#d4687c',
-        }}>
-          宝宝{metric === 'height' ? '身高' : '体重'}：{record[dataKey]} {unit}
-        </div>
-      )}
+      <div style={{
+        background: '#fdf2f8', borderRadius: 8, padding: '4px 8px', marginBottom: 6,
+        fontWeight: 600, color: '#d4687c',
+      }}>
+        宝宝{label}：{record[metric]} {unit}
+      </div>
 
       {/* 参考值 */}
       <div style={{ fontSize: 10, color: '#8b7b9b' }}>
         {PERCENTILE_CONFIG.map(pc => {
-          const val = getRefVal(pc.key);
+          const val = ref?.[pc.key];
           return (
             <div key={pc.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 1 }}>
               <span style={{
@@ -96,6 +97,11 @@ function CustomTooltip({ active, payload, label: week, recordMap, metric }) {
 }
 
 export default function GrowthChart({ records, birthDate, gender, standardType }) {
+  const heightContainerRef = useRef(null);
+  const weightContainerRef = useRef(null);
+  const [activeTooltip, setActiveTooltip] = useState(null);
+  // { record, metric, week, x, y } | null
+
   // 计算每条记录的周数并格式化日期
   const recordsWithWeek = useMemo(() => {
     if (!birthDate) return [];
@@ -127,17 +133,15 @@ export default function GrowthChart({ records, birthDate, gender, standardType }
     const maxWeek = Math.max(...weeks);
     const weekRange = maxWeek - minWeek;
 
-    // 扩展范围以确保参考线覆盖整个图表
     const startWeek = Math.max(0, Math.floor(minWeek) - Math.max(2, Math.ceil(weekRange * 0.1)));
     const endWeek = Math.ceil(maxWeek) + Math.max(2, Math.ceil(weekRange * 0.1));
 
-    // 建立记录周数映射
     const rMap = {};
     recordsWithWeek.forEach(r => { rMap[r.week] = r; });
 
     const hData = [];
     const wData = [];
-    const step = Math.max(0.5, Math.ceil(weekRange / 40) * 0.5); // 动态步长确保至少40个点
+    const step = Math.min(1.0, Math.max(0.5, Math.ceil(weekRange / 40) * 0.5));
 
     for (let w = startWeek; w <= endWeek; w += step) {
       const week = Math.round(w * 10) / 10;
@@ -211,6 +215,61 @@ export default function GrowthChart({ records, birthDate, gender, standardType }
     return [Math.floor((min - 0.5) * 10) / 10, Math.ceil((max + 0.5) * 10) / 10];
   }, [weightData]);
 
+  // 点击数据点的处理
+  const handleDotClick = useCallback((payload, metric, event) => {
+    event.stopPropagation();
+    const week = Math.round(payload.week);
+    const record = recordMap[week];
+    if (!record) return;
+
+    // 点同一个点 → 关闭
+    if (activeTooltip?.week === week && activeTooltip?.metric === metric) {
+      setActiveTooltip(null);
+      return;
+    }
+
+    const containerRef = metric === 'height' ? heightContainerRef : weightContainerRef;
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    setActiveTooltip({
+      record,
+      metric,
+      week,
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+  }, [recordMap, activeTooltip]);
+
+  // 空白处点击 → 关闭 tooltip
+  const handleDismiss = useCallback(() => setActiveTooltip(null), []);
+
+  // 创建只在实际记录点显示的 dot 渲染器
+  const createDotRenderer = (metric, color) => (props) => {
+    const { cx, cy, payload } = props;
+    if (payload[metric] == null) return null;
+
+    const isActive = activeTooltip?.week === Math.round(payload.week) && activeTooltip?.metric === metric;
+
+    return (
+      <circle
+        cx={cx}
+        cy={cy}
+        r={isActive ? 7 : 5}
+        fill={isActive ? '#FF6B8A' : color}
+        stroke="#fff"
+        strokeWidth={isActive ? 3 : 2}
+        style={{ cursor: 'pointer' }}
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDotClick(payload, metric, e);
+        }}
+      />
+    );
+  };
+
+
+  {/* 临时调试信息 */}
   if (!birthDate || recordsWithWeek.length < 2) return null;
 
   return (
@@ -220,12 +279,24 @@ export default function GrowthChart({ records, birthDate, gender, standardType }
       </h3>
 
       {/* 身高图 */}
-      <div style={{ marginBottom: 16 }}>
+      <div ref={heightContainerRef} style={{ position: 'relative', marginBottom: 16 }} onClick={handleDismiss}>
         <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 6, textAlign: 'center' }}>
           身高 (cm)
         </p>
         <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={heightData}>
+          <LineChart data={heightData} onClick={(state, e) => {
+              e.stopPropagation();
+              if (!state?.activePayload?.length) return;
+              const entry = state.activePayload.find(p => p.dataKey === 'height');
+              if (!entry || entry.payload.height == null) return;
+              const w = Math.round(entry.payload.week);
+              const rec = recordMap[w];
+              if (!rec) return;
+              const r = heightContainerRef.current?.getBoundingClientRect();
+              if (!r) return;
+              if (activeTooltip?.week === w && activeTooltip?.metric === 'height') { setActiveTooltip(null); return; }
+              setActiveTooltip({ record: rec, metric: 'height', week: w, x: e.clientX - r.left, y: e.clientY - r.top });
+            }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F5EAED" />
             <XAxis
               dataKey="week"
@@ -240,7 +311,7 @@ export default function GrowthChart({ records, birthDate, gender, standardType }
               domain={heightDomain}
               width={40}
             />
-            <Tooltip content={<CustomTooltip recordMap={recordMap} metric="height" />} />
+            <Tooltip content={() => null} />
             <Legend
               wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
               iconType="line"
@@ -259,27 +330,53 @@ export default function GrowthChart({ records, birthDate, gender, standardType }
                 connectNulls={true}
               />
             ))}
-            {/* 实际数据线 */}
+            {/* 实际数据线 — 只在实际记录处显示可点击的圆点 */}
             <Line
               type="monotone"
               dataKey="height"
               stroke="#FFB8C6"
               strokeWidth={3}
-              dot={{ fill: '#FFB8C6', r: 5, stroke: '#fff', strokeWidth: 2 }}
+              dot={{ r: 5, fill: '#FFB8C6', stroke: '#fff', strokeWidth: 2 }}
+              
               name="宝宝身高"
               connectNulls={true}
             />
           </LineChart>
         </ResponsiveContainer>
+        {activeTooltip?.metric === 'height' && (
+          <FloatingTooltip
+            record={activeTooltip.record}
+            metric="height"
+            week={activeTooltip.week}
+            standardType={standardType}
+            genderKey={genderKey}
+            style={{
+              left: Math.min(activeTooltip.x, (heightContainerRef.current?.clientWidth || 400) - 200),
+              top: Math.max(0, activeTooltip.y - 160),
+            }}
+          />
+        )}
       </div>
 
       {/* 体重图 */}
-      <div>
+      <div ref={weightContainerRef} style={{ position: 'relative' }} onClick={handleDismiss}>
         <p style={{ fontSize: 13, color: 'var(--text-light)', marginBottom: 6, textAlign: 'center' }}>
           体重 (kg)
         </p>
         <ResponsiveContainer width="100%" height={260}>
-          <LineChart data={weightData}>
+          <LineChart data={weightData} onClick={(state, e) => {
+              e.stopPropagation();
+              if (!state?.activePayload?.length) return;
+              const entry = state.activePayload.find(p => p.dataKey === 'weight');
+              if (!entry || entry.payload.weight == null) return;
+              const w = Math.round(entry.payload.week);
+              const rec = recordMap[w];
+              if (!rec) return;
+              const r = weightContainerRef.current?.getBoundingClientRect();
+              if (!r) return;
+              if (activeTooltip?.week === w && activeTooltip?.metric === 'weight') { setActiveTooltip(null); return; }
+              setActiveTooltip({ record: rec, metric: 'weight', week: w, x: e.clientX - r.left, y: e.clientY - r.top });
+            }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#F5EAED" />
             <XAxis
               dataKey="week"
@@ -294,7 +391,7 @@ export default function GrowthChart({ records, birthDate, gender, standardType }
               domain={weightDomain}
               width={40}
             />
-            <Tooltip content={<CustomTooltip recordMap={recordMap} metric="weight" />} />
+            <Tooltip content={() => null} />
             <Legend
               wrapperStyle={{ fontSize: 10, paddingTop: 4 }}
               iconType="line"
@@ -319,12 +416,26 @@ export default function GrowthChart({ records, birthDate, gender, standardType }
               dataKey="weight"
               stroke="#D4C5F0"
               strokeWidth={3}
-              dot={{ fill: '#D4C5F0', r: 5, stroke: '#fff', strokeWidth: 2 }}
+              dot={{ r: 5, fill: '#D4C5F0', stroke: '#fff', strokeWidth: 2 }}
+              
               name="宝宝体重"
               connectNulls={true}
             />
           </LineChart>
         </ResponsiveContainer>
+        {activeTooltip?.metric === 'weight' && (
+          <FloatingTooltip
+            record={activeTooltip.record}
+            metric="weight"
+            week={activeTooltip.week}
+            standardType={standardType}
+            genderKey={genderKey}
+            style={{
+              left: Math.min(activeTooltip.x, (weightContainerRef.current?.clientWidth || 400) - 200),
+              top: Math.max(0, activeTooltip.y - 160),
+            }}
+          />
+        )}
       </div>
     </div>
   );

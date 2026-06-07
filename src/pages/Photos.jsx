@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPhotos, addPhoto, deletePhoto } from '../utils/storage';
-import { formatDate } from '../utils/dateUtils';
+import { formatDate, todayStr } from '../utils/dateUtils';
 import { usePin } from '../utils/PinContext';
 import { Plus, Trash2 } from 'lucide-react';
 
@@ -149,7 +149,7 @@ export default function Photos() {
             <div className="modal-title">添加照片 📷</div>
             <div className="form-group">
               <label className="form-label">日期</label>
-              <input className="form-input" type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} />
+              <input className="form-input" type="date" value={form.date} max={todayStr()} onChange={e => setForm({ ...form, date: e.target.value })} />
             </div>
             <div className="form-group">
               <label className="form-label">照片</label>

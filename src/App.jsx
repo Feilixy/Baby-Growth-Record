@@ -9,7 +9,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Growth = lazy(() => import('./pages/Growth'));
 const Photos = lazy(() => import('./pages/Photos'));
 const Milestones = lazy(() => import('./pages/Milestones'));
-const Diaper = lazy(() => import('./pages/Diaper'));
+const Diary = lazy(() => import('./pages/Diary'));
 const Settings = lazy(() => import('./pages/Settings'));
 
 function PageLoading() {
@@ -35,7 +35,7 @@ export default function App() {
           <Route path="/growth" element={<Growth />} />
           <Route path="/photos" element={<Photos />} />
           <Route path="/milestones" element={<Milestones />} />
-          <Route path="/diaper" element={<Diaper />} />
+          <Route path="/diary" element={<Diary />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>

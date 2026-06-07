@@ -1,10 +1,10 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, TrendingUp, Camera, Droplets, Settings } from 'lucide-react';
+import { Home, TrendingUp, NotebookPen, Camera, Settings } from 'lucide-react';
 
 const tabs = [
   { to: '/', icon: Home, label: '首页' },
   { to: '/growth', icon: TrendingUp, label: '成长' },
-  { to: '/diaper', icon: Droplets, label: '尿布' },
+  { to: '/diary', icon: NotebookPen, label: '日记' },
   { to: '/photos', icon: Camera, label: '照片' },
   { to: '/settings', icon: Settings, label: '设置' },
 ];

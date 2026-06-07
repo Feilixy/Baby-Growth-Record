@@ -158,23 +158,42 @@ async function addItem(subcollection, item) {
   const ref = singleDocRef(subcollection, id);
   if (!ref) throw new Error('Firebase 未配置');
   const data = { ...item, id };
-  await setDoc(ref, data);
-  invalidateCache(subcollection);
+  // 真正乐观更新：先更新缓存再写入 Firestore，用户立刻看到结果
+  const cached = getCached(subcollection) || readCache(subcollection) || [];
+  setCached(subcollection, [...cached, data]);
+  // 后台静默写入 Firestore，不阻塞 UI
+  setDoc(ref, data).catch(e => {
+    console.error('Firestore 写入失败（乐观更新已应用，下次刷新会同步）:', e.message);
+  });
   return data;
 }
 
 async function updateItem(subcollection, id, data) {
   const ref = singleDocRef(subcollection, id);
   if (!ref) throw new Error('Firebase 未配置');
-  await updateDoc(ref, data);
-  invalidateCache(subcollection);
+  // 真正乐观更新：先更新缓存再写入 Firestore
+  const cached = getCached(subcollection) || readCache(subcollection);
+  if (cached) {
+    setCached(subcollection, cached.map(item => item.id === id ? { ...item, ...data } : item));
+  }
+  // 后台静默写入 Firestore
+  updateDoc(ref, data).catch(e => {
+    console.error('Firestore 更新失败（乐观更新已应用）:', e.message);
+  });
 }
 
 async function deleteItem(subcollection, id) {
   const ref = singleDocRef(subcollection, id);
   if (!ref) throw new Error('Firebase 未配置');
-  await deleteDoc(ref);
-  invalidateCache(subcollection);
+  // 真正乐观更新：先更新缓存再删除 Firestore 数据
+  const cached = getCached(subcollection) || readCache(subcollection);
+  if (cached) {
+    setCached(subcollection, cached.filter(item => item.id !== id));
+  }
+  // 后台静默删除 Firestore
+  deleteDoc(ref).catch(e => {
+    console.error('Firestore 删除失败（乐观更新已应用）:', e.message);
+  });
 }
 
 // ─── 检查 PIN 是否存在 ──────────────────────────────────────
@@ -256,7 +275,12 @@ export async function migrateFromLocalToFirestore() {
 
 // ─── Baby Profile ───────────────────────────────────────────
 
-export async function getProfile() {
+export async function getProfile(options = {}) {
+  // forceRefresh：等待 Firestore 返回真实数据（登录等场景需要）
+  if (options.forceRefresh) {
+    return await refreshProfile();
+  }
+
   // 从内存缓存返回（瞬间）
   const memCached = getCached('profile');
   if (memCached) return memCached;
@@ -369,6 +393,24 @@ export async function addDiaperRecord(record) {
 
 export async function deleteDiaperRecord(id) {
   await deleteItem('diaper_records', id);
+}
+
+// ─── Feeding Records ────────────────────────────────────────
+
+export async function getFeedingRecords() {
+  return getAllSorted('feeding_records', (a, b) => {
+    const dc = new Date(b.date) - new Date(a.date);
+    if (dc !== 0) return dc;
+    return b.time.localeCompare(a.time);
+  });
+}
+
+export async function addFeedingRecord(record) {
+  return await addItem('feeding_records', record);
+}
+
+export async function deleteFeedingRecord(id) {
+  await deleteItem('feeding_records', id);
 }
 
 // ─── Daily Todos ──────────────────────────────────────────

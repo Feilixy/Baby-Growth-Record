@@ -4,9 +4,13 @@ import {
 } from 'recharts';
 import { formatDate } from '../utils/dateUtils';
 
-// 自定义 Tooltip
 function CustomTooltip({ active, payload, label }) {
   if (!active || !payload || payload.length === 0) return null;
+
+  // Access full data from the first payload item
+  const data = payload[0]?.payload;
+  const formulaMl = data?.formula_ml || 0;
+  const breastDuration = data?.breast_duration || 0;
 
   return (
     <div style={{
@@ -17,76 +21,85 @@ function CustomTooltip({ active, payload, label }) {
       padding: '10px 14px',
       fontSize: 12,
       lineHeight: 1.8,
-      minWidth: 140,
+      minWidth: 160,
     }}>
       <div style={{ fontWeight: 600, marginBottom: 4, color: '#6b5b7b', fontSize: 13 }}>
         📅 {label}
       </div>
-      {payload.map((entry, idx) => (
-        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{
-            display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
-            background: entry.color, flexShrink: 0,
-          }} />
-          <span>{entry.name}：<strong>{entry.value}</strong> 次</span>
-        </div>
-      ))}
+      {payload.map((entry, idx) => {
+        let suffix = ' 次';
+        if (entry.dataKey === 'formula') suffix = ` 次 (共 ${formulaMl} ml)`;
+        if (entry.dataKey === 'breast') suffix = ` 次 (共 ${breastDuration} 分钟)`;
+        return (
+          <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{
+              display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+              background: entry.color, flexShrink: 0,
+            }} />
+            <span>{entry.name}：<strong>{entry.value}</strong>{suffix}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-export default function DiaperTrendChart({ records }) {
+export default function FeedingTrendChart({ records }) {
   const chartData = useMemo(() => {
     if (!records || records.length === 0) return [];
 
-    // 按日期分组统计
     const dailyMap = {};
     records.forEach(r => {
       if (!dailyMap[r.date]) {
-        dailyMap[r.date] = { pee: 0, poop: 0, change: 0 };
+        dailyMap[r.date] = { breast: 0, breast_duration: 0, formula: 0, formula_ml: 0, solid: 0 };
       }
-      if (r.type === 'pee' || r.type === 'both') dailyMap[r.date].pee++;
-      if (r.type === 'poop' || r.type === 'both') dailyMap[r.date].poop++;
-      if (r.type === 'change') dailyMap[r.date].change++;
+      if (r.type === 'breast') {
+        dailyMap[r.date].breast++;
+        dailyMap[r.date].breast_duration += r.duration || 0;
+      }
+      if (r.type === 'formula') {
+        dailyMap[r.date].formula++;
+        dailyMap[r.date].formula_ml += r.amount || 0;
+      }
+      if (r.type === 'solid') dailyMap[r.date].solid++;
     });
 
-    // 转换为数组并按日期排序
     const daily = Object.entries(dailyMap)
       .map(([date, counts]) => ({ date, ...counts }))
       .sort((a, b) => a.date.localeCompare(b.date));
 
     const daysSpan = daily.length;
 
-    // 如果跨度大于 60 天，按周聚合
     if (daysSpan > 60) {
       const weeklyMap = {};
       daily.forEach(d => {
         const dt = new Date(d.date);
-        // 取周一所在的周
         const dayOfWeek = dt.getDay();
-        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 周一为基准
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
         const monday = new Date(dt);
         monday.setDate(dt.getDate() - diff);
         const weekKey = formatDate(monday.toISOString().split('T')[0]);
-        if (!weeklyMap[weekKey]) weeklyMap[weekKey] = { pee: 0, poop: 0, change: 0, days: 0 };
-        weeklyMap[weekKey].pee += d.pee;
-        weeklyMap[weekKey].poop += d.poop;
-        weeklyMap[weekKey].change += d.change;
+        if (!weeklyMap[weekKey]) weeklyMap[weekKey] = { breast: 0, breast_duration: 0, formula: 0, formula_ml: 0, solid: 0, days: 0 };
+        weeklyMap[weekKey].breast += d.breast;
+        weeklyMap[weekKey].breast_duration += d.breast_duration;
+        weeklyMap[weekKey].formula += d.formula;
+        weeklyMap[weekKey].formula_ml += d.formula_ml;
+        weeklyMap[weekKey].solid += d.solid;
         weeklyMap[weekKey].days++;
       });
-      const result = Object.entries(weeklyMap)
+      return Object.entries(weeklyMap)
         .map(([week, counts]) => ({
           date: week,
-          pee: Math.round((counts.pee / counts.days) * 10) / 10,
-          poop: Math.round((counts.poop / counts.days) * 10) / 10,
-          change: Math.round((counts.change / counts.days) * 10) / 10,
-          label: `${week} (日均)`,
+          breast: Math.round((counts.breast / counts.days) * 10) / 10,
+          breast_duration: Math.round(counts.breast_duration / counts.days),
+          formula: Math.round((counts.formula / counts.days) * 10) / 10,
+          formula_ml: Math.round(counts.formula_ml / counts.days),
+          solid: Math.round((counts.solid / counts.days) * 10) / 10,
+          label: `~${week}`,
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
-      return result.map(d => ({ ...d, label: `~${d.date}` }));
     }
 
-    // 如果跨度大于 30 天，按周聚合显示合计值
     if (daysSpan > 30) {
       const weeklyMap = {};
       daily.forEach(d => {
@@ -96,27 +109,27 @@ export default function DiaperTrendChart({ records }) {
         const monday = new Date(dt);
         monday.setDate(dt.getDate() - diff);
         const weekKey = formatDate(monday.toISOString().split('T')[0]);
-        if (!weeklyMap[weekKey]) weeklyMap[weekKey] = { pee: 0, poop: 0, change: 0 };
-        weeklyMap[weekKey].pee += d.pee;
-        weeklyMap[weekKey].poop += d.poop;
-        weeklyMap[weekKey].change += d.change;
+        if (!weeklyMap[weekKey]) weeklyMap[weekKey] = { breast: 0, breast_duration: 0, formula: 0, formula_ml: 0, solid: 0 };
+        weeklyMap[weekKey].breast += d.breast;
+        weeklyMap[weekKey].breast_duration += d.breast_duration;
+        weeklyMap[weekKey].formula += d.formula;
+        weeklyMap[weekKey].formula_ml += d.formula_ml;
+        weeklyMap[weekKey].solid += d.solid;
       });
       return Object.entries(weeklyMap)
         .map(([week, counts]) => ({
           date: week,
-          pee: counts.pee,
-          poop: counts.poop,
-          change: counts.change,
+          breast: counts.breast,
+          breast_duration: counts.breast_duration,
+          formula: counts.formula,
+          formula_ml: counts.formula_ml,
+          solid: counts.solid,
           label: week,
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
     }
 
-    // 少于 30 天，按天显示
-    return daily.map(d => ({
-      ...d,
-      label: d.date,
-    }));
+    return daily.map(d => ({ ...d, label: d.date }));
   }, [records]);
 
   if (chartData.length < 2) return null;
@@ -127,7 +140,7 @@ export default function DiaperTrendChart({ records }) {
         fontFamily: 'var(--font-cute)', fontSize: 18,
         marginBottom: 12, textAlign: 'center',
       }}>
-        📈 排泄趋势
+        🍼 喂养趋势
       </h3>
       <p style={{ fontSize: 12, color: 'var(--text-light)', textAlign: 'center', marginBottom: 8, marginTop: -8 }}>
         {chartData.length > 0 && chartData[0].label?.startsWith('~')
@@ -153,36 +166,30 @@ export default function DiaperTrendChart({ records }) {
             width={30}
           />
           <Tooltip content={<CustomTooltip />} />
-          <Legend
-            wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
-            iconType="circle"
+          <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="circle" />
+          <Line
+            type="monotone"
+            dataKey="breast"
+            stroke="#FF8A80"
+            strokeWidth={2.5}
+            dot={{ fill: '#FF8A80', r: 4, stroke: '#fff', strokeWidth: 1.5 }}
+            name="🤱 母乳"
           />
           <Line
             type="monotone"
-            dataKey="pee"
-            stroke="#4FC3F7"
+            dataKey="formula"
+            stroke="#81D4FA"
             strokeWidth={2.5}
-            dot={{ fill: '#4FC3F7', r: 4, stroke: '#fff', strokeWidth: 1.5 }}
-            name="💧 小便"
-            connectNulls={false}
+            dot={{ fill: '#81D4FA', r: 4, stroke: '#fff', strokeWidth: 1.5 }}
+            name="🍼 奶粉"
           />
           <Line
             type="monotone"
-            dataKey="poop"
-            stroke="#8D6E63"
+            dataKey="solid"
+            stroke="#A5D6A7"
             strokeWidth={2.5}
-            dot={{ fill: '#8D6E63', r: 4, stroke: '#fff', strokeWidth: 1.5 }}
-            name="💩 大便"
-            connectNulls={false}
-          />
-          <Line
-            type="monotone"
-            dataKey="change"
-            stroke="#CE93D8"
-            strokeWidth={2.5}
-            dot={{ fill: '#CE93D8', r: 4, stroke: '#fff', strokeWidth: 1.5 }}
-            name="👶 换尿布"
-            connectNulls={false}
+            dot={{ fill: '#A5D6A7', r: 4, stroke: '#fff', strokeWidth: 1.5 }}
+            name="🥣 辅食"
           />
         </LineChart>
       </ResponsiveContainer>

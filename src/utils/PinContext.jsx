@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { initFirebase } from './firebase';
-import { setActivePin, getActivePin, clearPin, getProfile, saveProfile, getMilestones, getDiaperRecords, getDailyTodos, getUpcomingTodos } from './storage';
+import { setActivePin, getActivePin, clearPin, getProfile, saveProfile, getMilestones, getDiaperRecords, getDailyTodos, getUpcomingTodos, getGrowthRecords, getFeedingRecords } from './storage';
 
 const PinContext = createContext(null);
 
@@ -89,6 +89,8 @@ export function PinProvider({ children }) {
     if (!pinCode || !firebaseReady) return;
     Promise.all([
       getProfile(),
+      getGrowthRecords(),
+      getFeedingRecords(),
       getMilestones(),
       getDiaperRecords(),
       getDailyTodos(),
@@ -101,6 +103,8 @@ export function PinProvider({ children }) {
     // 这样 Dashboard 挂载时数据已经在传输中，甚至可以命中缓存
     if (firebaseReady) {
       getProfile().catch(() => {});
+      getGrowthRecords().catch(() => {});
+      getFeedingRecords().catch(() => {});
       getMilestones().catch(() => {});
       getDiaperRecords().catch(() => {});
       getDailyTodos().catch(() => {});

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getProfile, getMilestones, getDiaperRecords,
+import { getProfile, getMilestones, getDiaperRecords, getFeedingRecords,
          getDailyTodos, addDailyTodo, updateDailyTodo, deleteDailyTodo,
          getUpcomingTodos, addUpcomingTodo, updateUpcomingTodo, deleteUpcomingTodo } from '../utils/storage';
 import { getAge, todayStr, formatDate } from '../utils/dateUtils';
@@ -20,7 +20,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [forceShow, setForceShow] = useState(false);
   const [age, setAge] = useState(null);
-  const [diaperStats, setDiaperStats] = useState({ pee: 0, poop: 0 });
+  const [diaperStats, setDiaperStats] = useState({ pee: 0, poop: 0, change: 0 });
+  const [feedingStats, setFeedingStats] = useState({ breastDuration: 0, formulaMl: 0, solid: 0 });
   const [milestones, setMilestones] = useState([]);
   const navigate = useNavigate();
   const canEdit = isAllowed('editor');
@@ -41,14 +42,14 @@ export default function Dashboard() {
   const [removingId, setRemovingId] = useState(null);
 
   const today = todayStr();
-  const todayDisplay = formatDate(today);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       // 并行读取所有 Firestore 数据
-      const [p, diaperRecords, milestones, dailyTodos, allUpcoming] = await Promise.all([
+      const [p, feedingRecords, diaperRecords, milestones, dailyTodos, allUpcoming] = await Promise.all([
         getProfile(),
+        getFeedingRecords(),
         getDiaperRecords(),
         getMilestones(),
         getDailyTodos(),
@@ -56,6 +57,14 @@ export default function Dashboard() {
       ]);
 
       setProfile(p);
+
+      const todayFeeding = feedingRecords.filter(r => r.date === today);
+      setFeedingStats({
+        breastDuration: todayFeeding.filter(r => r.type === 'breast').reduce((s, r) => s + (r.duration || 0), 0),
+        formulaMl: todayFeeding.filter(r => r.type === 'formula').reduce((s, r) => s + (r.amount || 0), 0),
+        solid: todayFeeding.filter(r => r.type === 'solid').length,
+      });
+
       if (p?.birthDate) setAge(getAge(p.birthDate));
       else setAge(null);
 
@@ -63,6 +72,7 @@ export default function Dashboard() {
       setDiaperStats({
         pee: todayDiaper.filter(r => r.type === 'pee' || r.type === 'both').length,
         poop: todayDiaper.filter(r => r.type === 'poop' || r.type === 'both').length,
+        change: todayDiaper.filter(r => r.type === 'change').length,
       });
 
       setMilestones(milestones);
@@ -365,6 +375,7 @@ export default function Dashboard() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 12, color: '#B8860B', flexShrink: 0 }}>📅 完成日期</span>
               <input type="date" className="form-input"
+                min={profile?.birthDate || ""}
                 value={newUpcomingDate}
                 onChange={e => setNewUpcomingDate(e.target.value)}
                 style={{ flex: 1, fontSize: 13, padding: '7px 10px' }} />
@@ -451,17 +462,82 @@ export default function Dashboard() {
 
       {/* 1️⃣ 今日总结 */}
       <div className="today-section">
-        <div className="today-title">📅 今日总结 · {todayDisplay}</div>
-        <div style={{ display: 'flex', gap: 24, justifyContent: 'center' }}>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 28 }}>💧</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--pink)' }}>{diaperStats.pee}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-light)' }}>小便</div>
+        {/* 顶部横条：日期 + 出生天数 */}
+        <div style={{
+          background: 'linear-gradient(135deg, #FFB8C6, #FFD6E0)',
+          borderRadius: 12, padding: '14px 16px', marginBottom: 12,
+          textAlign: 'center',
+        }}>
+          <div style={{ fontSize: 18, fontWeight: 700, color: 'white', fontFamily: 'var(--font-cute)' }}>
+            📅 {new Date().getFullYear()}年{new Date().getMonth() + 1}月{new Date().getDate()}日
           </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 28 }}>💩</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--pink)' }}>{diaperStats.poop}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-light)' }}>大便</div>
+          {age && (
+            <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 4 }}>
+              宝宝出生已经 <strong style={{ fontSize: 20 }}>{age.days}</strong> 天啦 🎉
+            </div>
+          )}
+        </div>
+
+        {/* 左右两栏 */}
+        <div style={{ display: 'flex', gap: 10 }}>
+          {/* 左栏：喂养汇总 */}
+          <div style={{
+            flex: 1, background: '#FFF8F0', borderRadius: 12, padding: 14,
+            border: '1px solid #FFE8D6',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#B8860B', fontFamily: 'var(--font-cute)', marginBottom: 10, textAlign: 'center' }}>
+              🍼 喂养汇总
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-light)' }}>🤱 母乳</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: 'var(--pink)' }}>
+                  {feedingStats.breastDuration}<span style={{ fontSize: 12, fontWeight: 400 }}> 分钟</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-light)' }}>🍼 奶粉</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#5B9BD5' }}>
+                  {feedingStats.formulaMl}<span style={{ fontSize: 12, fontWeight: 400 }}> ml</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-light)' }}>🥣 辅食</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#6BAF6B' }}>
+                  {feedingStats.solid}<span style={{ fontSize: 12, fontWeight: 400 }}> 顿</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 右栏：排泄汇总 */}
+          <div style={{
+            flex: 1, background: '#F5FFFA', borderRadius: 12, padding: 14,
+            border: '1px solid #C8E6C9',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#388E3C', fontFamily: 'var(--font-cute)', marginBottom: 10, textAlign: 'center' }}>
+              💩 排泄汇总
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-light)' }}>💧 小便</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#5B9BD5' }}>
+                  {diaperStats.pee}<span style={{ fontSize: 12, fontWeight: 400 }}> 次</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-light)' }}>💩 大便</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#8D6E63' }}>
+                  {diaperStats.poop}<span style={{ fontSize: 12, fontWeight: 400 }}> 次</span>
+                </span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-light)' }}>🧻 换尿布</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: '#7B1FA2' }}>
+                  {diaperStats.change}<span style={{ fontSize: 12, fontWeight: 400 }}> 次</span>
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

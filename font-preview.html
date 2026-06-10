@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>字体预览</title>
+<link rel="stylesheet" href="https://fonts.loli.net/css2?family=ZCOOL+KuaiLe&display=swap">
+<link rel="stylesheet" href="https://fonts.loli.net/css2?family=ZCOOL+QingKe+HuangYou&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'PingFang SC',sans-serif;background:#FFF5F5;padding:16px;max-width:600px;margin:0 auto}
+h1{font-size:20px;color:#FF8FA3;text-align:center;margin:16px 0 4px}
+.sub{text-align:center;font-size:13px;color:#999;margin-bottom:16px}
+h2{font-size:14px;color:#B8860B;margin:16px 0 8px;padding-bottom:4px;border-bottom:2px solid #FFE0E8}
+.card{background:#fff;border-radius:14px;padding:12px 14px;margin-bottom:6px;box-shadow:0 1px 6px rgba(255,184,198,0.12)}
+.card.avail{border-left:3px solid #FFB8C6}
+.card.cdn{border-left:3px solid #FF8FA3;background:#FFFAFB}
+.sample{font-size:20px;line-height:1.6;margin:6px 0 3px;word-break:break-all}
+.name{font-size:12px;color:#999}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:4px}
+.badge.ok{background:#E8F5E9;color:#2E7D32}
+.badge.cdn{background:#FCE4EC;color:#E91E63}
+.tip{text-align:center;font-size:13px;color:#999;margin:16px 0 8px}
+</style>
+</head>
+<body>
+
+<h1>🖌 字体预览</h1>
+<p class="sub">系统检测 + 国内 CDN 可加载的可爱字体</p>
+<div id="result"><p style="text-align:center;color:#999">检测中...</p></div>
+<div id="cdn"></div>
+
+<script>
+var fonts = [
+  // 可爱 / 手写风
+  {g:'🌸 可爱 / 手写风', items:['Wawati SC','Yuanti SC','Hannotate SC','HanziPen SC','Xingkai SC','STKaiti','Kaiti SC','KaiTi','ZCOOL KuaiLe']},
+  // 圆润 / 现代风
+  {g:'📝 圆润 / 现代风', items:['PingFang SC','PingFang TC','Lantinghei SC','YouYuan','Microsoft YaHei','Microsoft JhengHei','Noto Sans SC','Noto Serif SC']},
+  // 传统 / 装饰风
+  {g:'🎨 传统 / 装饰风', items:['STSong','Songti SC','STFangsong','STHeiti','Baoli SC','Weibei SC','STCaiyun','STHupo','FangSong','SimSun','SimHei']},
+];
+
+function checkFont(n) {
+  var c=document.createElement('canvas'),ctx=c.getContext('2d'),s='中abc123';
+  ctx.font='20px "'+n+'",monospace'; var w1=ctx.measureText(s).width;
+  ctx.font='20px monospace'; var w2=ctx.measureText(s).width;
+  return Math.abs(w1-w2)>0.5;
+}
+
+var h='';
+fonts.forEach(function(g){
+  h+='<h2>'+g.g+'</h2>';
+  g.items.forEach(function(n){
+    var ok=checkFont(n);
+    if(ok) {
+      h+='<div class="card avail"><div class="sample" style="font-family:\''+n+'\'">🌸 宝宝成长记录 123 ABC</div><div class="name">'+n+' <span class="badge ok">✅ 系统</span></div></div>';
+    }
+  });
+});
+document.getElementById('result').innerHTML=h;
+
+// CDN 字体
+var cdnFonts=[
+  {n:'ZCOOL KuaiLe',l:'站酷快乐体',d:'fonts.loli.net 镜像'},
+  {n:'ZCOOL QingKe HuangYou',l:'站酷庆科黄油体',d:'fonts.loli.net 镜像'},
+  {n:'LXGW WenKai',l:'霞鹜文楷 ⭐',d:'开源手写体，jsDelivr CDN，推荐！'},
+];
+var ch='<h2>🌐 国内 CDN 加载的可爱字体</h2><p style="font-size:12px;color:#CCC;margin:-6px 0 10px">这些从国内 CDN 加载，在中国可正常访问</p>';
+cdnFonts.forEach(function(f){
+  ch+='<div class="card cdn"><div class="sample" style="font-family:\''+f.n+'\'">🌸 宝宝成长记录 123 ABC</div><div class="name">'+f.l+' ('+f.n+') <span class="badge cdn">CDN</span><br><span style="font-size:11px;color:#BBB">'+f.d+'</span></div></div>';
+});
+ch+='<div class="tip">💡 选好了告诉我字体名称，我替换到项目里</div>';
+document.getElementById('cdn').innerHTML=ch;
+</script>
+</body>
+</html>

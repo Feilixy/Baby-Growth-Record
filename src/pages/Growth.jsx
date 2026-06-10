@@ -188,7 +188,7 @@ export default function Growth() {
             </div>
             <div className="form-group">
               <label className="form-label">日期</label>
-              <input className="form-input" type="date" value={form.date} max={todayStr()} onChange={e => setForm({ ...form, date: e.target.value })} />
+              <input className="form-input" type="date" value={form.date} min={profile?.birthDate || ""} max={todayStr()} onChange={e => setForm({ ...form, date: e.target.value })} />
             </div>
             <div className="form-group">
               <label className="form-label">身高 (cm)</label>

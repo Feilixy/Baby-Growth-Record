@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getMilestones, addMilestone, deleteMilestone } from '../utils/storage';
+import { getMilestones, addMilestone, deleteMilestone, getProfile } from '../utils/storage';
 import { formatDate, todayStr } from '../utils/dateUtils';
 import { milestoneCategories, defaultMilestoneSuggestions } from '../data/defaultMilestones';
 import { usePin } from '../utils/PinContext';
@@ -10,6 +10,8 @@ export default function Milestones() {
   const canEdit = isAllowed('editor');
   const [milestones, setMilestones] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [birthDate, setBirthDate] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ date: '', title: '', category: 'other', note: '' });
@@ -17,7 +19,12 @@ export default function Milestones() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const m = await getMilestones();
+      const [p, m] = await Promise.all([
+        getProfile(),
+        getMilestones(),
+      ]);
+      setProfile(p);
+      if (p?.birthDate) setBirthDate(p.birthDate);
       setMilestones(m);
     } catch (e) {
       console.error('Milestones 加载失败:', e);
@@ -151,6 +158,7 @@ export default function Milestones() {
             <div className="form-group">
               <label className="form-label">日期</label>
               <input className="form-input" type="date" value={form.date}
+                min={birthDate}
                 max={todayStr()}
                 onChange={e => setForm({ ...form, date: e.target.value })} />
             </div>

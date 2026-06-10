@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { getProfile, saveProfile, clearPin } from '../utils/storage';
+import { getProfile, saveProfile, clearPin, clearAllData, deleteFamilyCompletely } from '../utils/storage';
 import { usePin, ROLES } from '../utils/PinContext';
 import { useNavigate } from 'react-router-dom';
 import { Users, Shield, KeyRound, UserPlus, UserMinus, Crown, Edit3, Eye, GripVertical, Lock } from 'lucide-react';
@@ -22,6 +22,11 @@ export default function Settings() {
   const [users, setUsers] = useState({});
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState('viewer');
+  const [dangerModal, setDangerModal] = useState(null); // 'clear' | 'delete'
+  const [dangerPwd, setDangerPwd] = useState('');
+  const [dangerConfirm, setDangerConfirm] = useState('');
+  const [dangerError, setDangerError] = useState('');
+  const [dangerLoading, setDangerLoading] = useState(false);
   const { pinCode, clearPin: logoutPin, firebaseReady, role, userName, isAllowed } = usePin();
   const navigate = useNavigate();
 
@@ -178,10 +183,42 @@ export default function Settings() {
     }
   };
 
-  const handleClearAll = () => {
-    if (!window.confirm('确定要清除所有数据吗？此操作不可恢复！')) return;
-    localStorage.clear();
-    logoutPin();
+  const handleDangerConfirm = async () => {
+    if (!dangerPwd || dangerPwd.length < 4) {
+      setDangerError('请输入管理员密码');
+      return;
+    }
+    if (dangerPwd !== profile?.adminPassword) {
+      setDangerError('管理员密码错误');
+      return;
+    }
+    if (dangerModal === 'delete' && dangerConfirm !== '确认删除') {
+      setDangerError('请输入「确认删除」');
+      return;
+    }
+    setDangerLoading(true);
+    try {
+      if (dangerModal === 'clear') {
+        await clearAllData();
+      } else if (dangerModal === 'delete') {
+        await deleteFamilyCompletely(pinCode);
+      }
+      setDangerModal(null);
+      setDangerPwd('');
+      setDangerConfirm('');
+      setDangerError('');
+      setDangerLoading(false);
+      if (dangerModal === 'delete') {
+        // 删除家庭后退出登录
+        logoutPin();
+      } else {
+        // 清除数据后刷新页面
+        window.location.reload();
+      }
+    } catch (e) {
+      setDangerError('操作失败: ' + (e.message || '请重试'));
+      setDangerLoading(false);
+    }
   };
 
   const handleSwitchPin = () => {
@@ -515,6 +552,112 @@ export default function Settings() {
         </div>
       )}
 
+      {/* 危险操作弹窗 */}
+      {dangerModal && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0,0,0,0.4)', zIndex: 1000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 20,
+        }} onClick={() => { setDangerModal(null); setDangerError(''); setDangerPwd(''); setDangerConfirm(''); }}>
+          <div style={{
+            background: 'white', borderRadius: 16, padding: 24,
+            maxWidth: 380, width: '100%',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
+          }} onClick={e => e.stopPropagation()}>
+            {/* 清除数据 */}
+            {dangerModal === 'clear' && (
+              <>
+                <h3 style={{ fontFamily: 'var(--font-cute)', fontSize: 18, textAlign: 'center', marginBottom: 12, color: '#E53E3E' }}>
+                  ⚠️ 清除所有数据
+                </h3>
+                <div style={{
+                  background: '#FFF5F5', border: '1px solid #FED7D7',
+                  borderRadius: 10, padding: 14, marginBottom: 16,
+                  fontSize: 13, color: '#C53030', lineHeight: 1.7,
+                }}>
+                  此操作将<strong>删除以下所有数据</strong>，且不可恢复：
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 20 }}>
+                    <li>📏 生长记录（身高/体重）</li>
+                    <li>📷 照片记录</li>
+                    <li>🏆 里程碑记录</li>
+                    <li>💩 尿布记录</li>
+                    <li>🍼 喂养记录</li>
+                    <li>📋 每日待办、近期待办</li>
+                  </ul>
+                  <div style={{ marginTop: 8, color: '#38A169', fontWeight: 600 }}>
+                    ✅ 以下内容<strong>保留</strong>：家庭码、宝宝档案（姓名/生日/性别）、家庭成员
+                  </div>
+                </div>
+              </>
+            )}
+            {/* 删除家庭 */}
+            {dangerModal === 'delete' && (
+              <>
+                <h3 style={{ fontFamily: 'var(--font-cute)', fontSize: 18, textAlign: 'center', marginBottom: 12, color: '#E53E3E' }}>
+                  ⛔ 删除家庭所有数据
+                </h3>
+                <div style={{
+                  background: '#FFF5F5', border: '1px solid #FED7D7',
+                  borderRadius: 10, padding: 14, marginBottom: 16,
+                  fontSize: 13, color: '#C53030', lineHeight: 1.7,
+                }}>
+                  <p style={{ fontWeight: 700, marginBottom: 8 }}>此操作将<strong>永久删除整个家庭</strong>的所有信息：</p>
+                  <ul style={{ margin: '0 0 8px', paddingLeft: 20 }}>
+                    <li>🔑 家庭码（此号码将无法再次使用）</li>
+                    <li>👶 宝宝档案、家庭成员</li>
+                    <li>📏 所有成长记录、照片、里程碑</li>
+                    <li>🍼 所有喂养、尿布、待办数据</li>
+                  </ul>
+                  <div style={{
+                    background: '#FFE0E0', borderRadius: 8, padding: 10,
+                    fontWeight: 700, textAlign: 'center', fontSize: 14,
+                  }}>
+                    ⚠️ 数据无法找回，请确认！
+                  </div>
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 13, color: 'var(--text-light)', display: 'block', marginBottom: 6 }}>
+                    请输入 <strong style={{ color: '#E53E3E' }}>确认删除</strong> 以继续：
+                  </label>
+                  <input className="form-input" type="text" placeholder="输入「确认删除」"
+                    value={dangerConfirm}
+                    onChange={e => setDangerConfirm(e.target.value)}
+                    style={{ textAlign: 'center', fontSize: 16, letterSpacing: 2 }} />
+                </div>
+              </>
+            )}
+
+            {/* 共通：管理员密码验证 */}
+            <div style={{ marginTop: dangerModal === 'delete' ? 0 : 0 }}>
+              <label style={{ fontSize: 13, color: 'var(--text-light)', display: 'block', marginBottom: 6 }}>
+                🔑 请输入管理员密码以确认身份：
+              </label>
+              <input className="pin-input" type="password" inputMode="numeric" pattern="[0-9]*"
+                maxLength={6} placeholder="管理员密码"
+                value={dangerPwd}
+                onChange={e => setDangerPwd(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={e => e.key === 'Enter' && handleDangerConfirm()}
+                style={{ fontSize: 20, letterSpacing: 3, marginBottom: 8 }} />
+            </div>
+
+            {dangerError && <div className="pin-error">{dangerError}</div>}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+              <button className="btn btn-secondary" style={{ flex: 1 }}
+                onClick={() => { setDangerModal(null); setDangerError(''); setDangerPwd(''); setDangerConfirm(''); }}>
+                取消
+              </button>
+              <button className="btn btn-danger" style={{ flex: 1 }}
+                onClick={handleDangerConfirm}
+                disabled={dangerLoading || dangerPwd.length < 4 || (dangerModal === 'delete' && dangerConfirm !== '确认删除')}>
+                {dangerLoading ? '处理中...' : dangerModal === 'clear' ? '确认清除' : '确认删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 数据说明 */}
       <div className="card" style={{ marginTop: 12 }}>
         <h3 style={{ fontFamily: 'var(--font-cute)', fontSize: 16, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -535,10 +678,16 @@ export default function Settings() {
           )}
         </ul>
         {isAdmin && (
-          <button className="btn btn-danger btn-block btn-sm" style={{ marginTop: 12 }}
-            onClick={handleClearAll}>
-            清除所有数据
-          </button>
+          <>
+            <button className="btn btn-danger btn-block btn-sm" style={{ marginTop: 12 }}
+              onClick={() => { setDangerModal('clear'); setDangerPwd(''); setDangerError(''); }}>
+              🗑️ 清除所有数据
+            </button>
+            <button className="btn btn-danger btn-block btn-sm" style={{ marginTop: 8, background: '#C53030' }}
+              onClick={() => { setDangerModal('delete'); setDangerPwd(''); setDangerConfirm(''); setDangerError(''); }}>
+              ⛔ 删除家庭所有数据
+            </button>
+          </>
         )}
       </div>
     </div>

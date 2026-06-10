@@ -41,9 +41,11 @@ async function readWithCache(subcollection, sortFn) {
     return copy;
   }
 
-  // 无缓存 → 不阻塞，后台同步并返回空数组
-  refreshFromFirestore(subcollection).catch(() => {});
-  return [];
+  // 无缓存 → 等待 Firestore 同步
+  const items = await refreshFromFirestore(subcollection).catch(() => []);
+  setCached(subcollection, items);
+  if (sortFn) items.sort(sortFn);
+  return items;
 }
 
 // 后台从 Firestore 刷新缓存（带请求去重）
@@ -76,6 +78,8 @@ let currentPin = localStorage.getItem('baby_pin');
 export function setActivePin(pin) {
   currentPin = pin;
   localStorage.setItem('baby_pin', pin);
+  // 切换家庭码时清空内存缓存，防止读到上一个家庭的数据
+  sessionCache.clear();
 }
 
 export function getActivePin() {
@@ -85,6 +89,7 @@ export function getActivePin() {
 export function clearPin() {
   currentPin = null;
   localStorage.removeItem('baby_pin');
+  sessionCache.clear();
 }
 
 // ─── ID 生成 ────────────────────────────────────────────────
@@ -326,8 +331,13 @@ async function refreshProfile() {
 export async function saveProfile(profile) {
   const ref = singleDocRef('profile', 'default');
   if (!ref) throw new Error('Firebase 未配置');
-  writeCache('profile', profile);
-  await setDoc(ref, profile);
+  // Firestore 不允许 undefined 值，清除后再写入
+  const clean = {};
+  for (const [key, val] of Object.entries(profile)) {
+    if (val !== undefined) clean[key] = val;
+  }
+  writeCache('profile', clean);
+  await setDoc(ref, clean);
 }
 
 // ─── Growth Records ─────────────────────────────────────────
@@ -447,4 +457,51 @@ export async function updateUpcomingTodo(id, data) {
 
 export async function deleteUpcomingTodo(id) {
   await deleteItem('upcoming_todos', id);
+}
+
+
+// ─── 批量删除 ────────────────────────────────────────────
+
+const ALL_DATA_COLLECTIONS = ['growth_records', 'photos', 'milestones', 'diaper_records', 'feeding_records', 'daily_todos', 'upcoming_todos']
+
+export async function clearAllData() {
+  const db = getDb();
+  for (const col of ALL_DATA_COLLECTIONS) {
+    invalidateCache(col);
+    if (!db) continue;
+    const ref = collection(db, 'data', currentPin, col);
+    const snapshot = await getDocs(ref);
+    if (snapshot.empty) continue;
+    const promises = snapshot.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(promises);
+  }
+}
+
+export async function deleteFamilyCompletely(pin) {
+  const targetPin = pin || currentPin;
+  for (const col of [...ALL_DATA_COLLECTIONS, 'profile']) {
+    if (targetPin === currentPin) {
+      invalidateCache(col);
+    }
+    const db = getDb();
+    if (!db) continue;
+    const ref = collection(db, 'data', targetPin, col);
+    const snapshot = await getDocs(ref);
+    if (snapshot.empty) continue;
+    const promises = snapshot.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(promises);
+  }
+  // 清除 localStorage 中此 PIN 的所有缓存
+  if (targetPin === currentPin) {
+    localStorage.removeItem('baby_pin');
+  }
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('cache_' + targetPin + '_')) {
+      keysToRemove.push(key);
+    }
+  }
+  keysToRemove.forEach(k => localStorage.removeItem(k));
+  sessionCache.clear();
 }

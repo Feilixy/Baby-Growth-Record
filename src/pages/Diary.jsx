@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getFeedingRecords, addFeedingRecord, deleteFeedingRecord,
   getDiaperRecords, addDiaperRecord, deleteDiaperRecord,
+  getProfile,
 } from '../utils/storage';
 import { formatTime, todayStr, nowTimeStr } from '../utils/dateUtils';
 import { usePin } from '../utils/PinContext';
@@ -43,6 +44,8 @@ export default function Diary() {
   const { isAllowed } = usePin();
   const canEdit = isAllowed('editor');
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [birthDate, setBirthDate] = useState('');
 
   // Feeding state
   const [feedingRecords, setFeedingRecords] = useState([]);
@@ -67,10 +70,13 @@ export default function Diary() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [f, d] = await Promise.all([
+      const [p, f, d] = await Promise.all([
+        getProfile(),
         getFeedingRecords(),
         getDiaperRecords(),
       ]);
+      setProfile(p);
+      if (p?.birthDate) setBirthDate(p.birthDate);
       setFeedingRecords(f);
       setExcretionRecords(d);
     } catch (e) {
@@ -225,6 +231,7 @@ export default function Diary() {
               type="date"
               value={feedingDate}
               onChange={e => setFeedingDate(e.target.value)}
+              min={birthDate}
               max={todayStr()}
               style={{ textAlign: 'center', fontSize: 16, fontWeight: 600 }}
             />
@@ -317,6 +324,7 @@ export default function Diary() {
               type="date"
               value={excretionDate}
               onChange={e => setExcretionDate(e.target.value)}
+              min={birthDate}
               max={todayStr()}
               style={{ textAlign: 'center', fontSize: 16, fontWeight: 600 }}
             />
@@ -411,6 +419,7 @@ export default function Diary() {
             <div className="form-group">
               <label className="form-label">日期</label>
               <input className="form-input" type="date" value={feedingForm.date}
+                min={birthDate}
                 max={todayStr()}
                 onChange={e => setFeedingForm({ ...feedingForm, date: e.target.value })} />
             </div>
@@ -476,6 +485,7 @@ export default function Diary() {
             <div className="form-group">
               <label className="form-label">日期</label>
               <input className="form-input" type="date" value={excretionForm.date}
+                min={birthDate}
                 max={todayStr()}
                 onChange={e => setExcretionForm({ ...excretionForm, date: e.target.value })} />
             </div>

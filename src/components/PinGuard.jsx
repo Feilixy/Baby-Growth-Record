@@ -49,6 +49,16 @@ export default function PinGuard() {
 
     setLoading(true);
     try {
+      // 创建模式：检查家庭码是否已存在
+      // 创建模式：检查家庭码是否已存在
+      if (mode === 'create' && firebaseReady) {
+        const exists = await checkPinExists(pin);
+        if (exists) {
+          setError('该家庭码已存在，请使用其他家庭码');
+          setLoading(false);
+          return;
+        }
+      }
       setActivePin(pin);
       if (mode === 'enter') {
         const exists = await checkPinExists(pin);
@@ -111,6 +121,7 @@ export default function PinGuard() {
       }
 
       await setPin(pin, { userName: userName.trim(), role: 'admin' });
+      window.location.hash = '#/';
     } catch (e) {
       setError('操作失败，请重试');
     }
@@ -129,6 +140,7 @@ export default function PinGuard() {
       setActivePin(pin);
       await migrateFromLocalToFirestore();
       await setPin(pin, { userName: name, role });
+      window.location.hash = '#/';
     } catch (e) {
       setError('操作失败，请重试');
     }
@@ -157,6 +169,7 @@ export default function PinGuard() {
       setActivePin(pin);
       await migrateFromLocalToFirestore();
       await setPin(pin, { userName: selectedUser.name, role: 'admin' });
+      window.location.hash = '#/';
     } catch (e) {
       setError('验证失败，请重试');
     }
@@ -169,6 +182,7 @@ export default function PinGuard() {
       setActivePin(pin);
       await migrateFromLocalToFirestore();
       await setPin(pin, { userName: selectedUser.name, role: 'admin' });
+      window.location.hash = '#/';
     } catch (e) {
       setError('登录失败，请重试');
     }
@@ -192,6 +206,7 @@ export default function PinGuard() {
       setActivePin(pin);
       await migrateFromLocalToFirestore();
       await setPin(pin, { userName: selectedUser.name, role: 'admin' });
+      window.location.hash = '#/';
     } catch (e) {
       setError('重置失败，请重试');
     }

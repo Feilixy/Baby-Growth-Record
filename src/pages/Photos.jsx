@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getPhotos, addPhoto, deletePhoto } from '../utils/storage';
+import { getPhotos, addPhoto, deletePhoto, getProfile } from '../utils/storage';
 import { formatDate, todayStr } from '../utils/dateUtils';
 import { usePin } from '../utils/PinContext';
 import { Plus, Trash2 } from 'lucide-react';
@@ -9,6 +9,8 @@ export default function Photos() {
   const canEdit = isAllowed('editor');
   const [photos, setPhotos] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const [birthDate, setBirthDate] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -17,7 +19,12 @@ export default function Photos() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const p = await getPhotos();
+      const [prof, p] = await Promise.all([
+        getProfile(),
+        getPhotos(),
+      ]);
+      setProfile(prof);
+      if (prof?.birthDate) setBirthDate(prof.birthDate);
       setPhotos(p);
     } catch (e) {
       console.error('Photos 加载失败:', e);
@@ -149,7 +156,7 @@ export default function Photos() {
             <div className="modal-title">添加照片 📷</div>
             <div className="form-group">
               <label className="form-label">日期</label>
-              <input className="form-input" type="date" value={form.date} max={todayStr()} onChange={e => setForm({ ...form, date: e.target.value })} />
+              <input className="form-input" type="date" value={form.date} min={birthDate} max={todayStr()} onChange={e => setForm({ ...form, date: e.target.value })} />
             </div>
             <div className="form-group">
               <label className="form-label">照片</label>

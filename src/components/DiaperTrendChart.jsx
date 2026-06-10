@@ -181,7 +181,7 @@ export default function DiaperTrendChart({ records }) {
             stroke="#CE93D8"
             strokeWidth={2.5}
             dot={{ fill: '#CE93D8', r: 4, stroke: '#fff', strokeWidth: 1.5 }}
-            name="👶 换尿布"
+            name="🧻 换尿布"
             connectNulls={false}
           />
         </LineChart>
